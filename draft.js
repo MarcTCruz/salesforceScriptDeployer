@@ -309,6 +309,7 @@ const generateDeployPackages = async () => {
 // Fase 4: Deploy
 // -------------------------------------------------------
 const deployPackages = async () => {
+    throw 'Não usar esta função a menos que saiba realmente o que está fazendo!';
     console.log('Fase 4: Deploy dos pacotes...');
     const packageOrder = ['package1', 'package2', 'package3', 'package4', 'package5', 'package6', 'package7', 'package8', 'package9', 'package10', 'package11', 'package12'];
 
@@ -382,7 +383,7 @@ const main = async () => {
         await identifyNewMetadata(sourcePath, targetPath);
         await sanitizeMetadata();
         await generateDeployPackages();
-        await deployPackages();
+        //await deployPackages();
         //await postDeploy();
         console.log('Deploy automatizado concluído com sucesso.');
     } catch (err) {
@@ -392,3 +393,8 @@ const main = async () => {
 };
 
 main();
+//script usage node draft.js --sourcePath=force-app/main/default --targetPath=deploy-staging
+//deve ser testado os métodos:
+//await identifyNewMetadata(sourcePath, targetPath);
+//await sanitizeMetadata();
+//await generateDeployPackages();
