@@ -13,12 +13,11 @@
 const fs = require('fs-extra');
 const path = require('path');
 const { execSync } = require('child_process');
-const minimist = require('minimist');
 const convert = require('xml-js');
 
 const DEPLOY_STAGING = path.join(process.cwd(), 'deploy-staging');
-const NEWS_DIR = path.join(DEPLOY_STAGING, 'force-app', 'main', 'news');
-const SANITIZED_DIR = path.join(DEPLOY_STAGING, 'force-app', 'main', 'sanitized');
+const NEWS_DIR = path.join(DEPLOY_STAGING, 'news', 'force-app', 'main');
+const SANITIZED_DIR = path.join(DEPLOY_STAGING, 'sanitized', 'force-app', 'main');
 const PACKAGES_DIR = path.join(DEPLOY_STAGING, 'packages');
 const METADATA_STATES_FILE = path.join(DEPLOY_STAGING, 'metadata-original-states.json');
 
@@ -137,7 +136,7 @@ const identifyNewMetadata = async (sourcePath, targetPath) => {
             if (objectName in copiedObjects) {
                 continue;
             }
-            
+
             const objectFile = path.join(sourcePath, 'force-app', 'main', 'default', 'objects', objectName, `${objectName}.object-meta.xml`);
             const objectRelative = path.relative(sourcePath, objectFile);
             copiedObjects.add(objectName);
@@ -270,7 +269,7 @@ const generateDeployPackages = async () => {
             components: ['flows', 'flowDefinitions', 'Email', 'labels']
         },
         package5: {
-            components: ['SharingRules', 'workflows', 'assignmentRules', 'approvalProcess']
+            components: ['SharingRules', 'workflows', 'assignmentRules', 'approvalProcesses']
         },
         package6: {
             components: ['lwc', 'aura', 'pages']
@@ -304,8 +303,10 @@ const generateDeployPackages = async () => {
 
         // For each component, copy its folder structure from the specified baseSource
         for (const comp of components) {
-            const compSourceDir = path.join(baseSource, 'force-app', 'main', 'default', comp);
-            if (!fs.existsSync(compSourceDir)) continue;
+            const compSourceDir = path.join(baseSource, comp);
+            if (!fs.existsSync(compSourceDir)) {
+                continue;
+            }
             const destDir = path.join(pkgDir, comp);
             await fs.copy(compSourceDir, destDir);
         }
@@ -387,8 +388,8 @@ const main = async () => {
         process.exit(1);
     }
     try {
-        await identifyNewMetadata(sourcePath, targetPath);
-        await sanitizeMetadata();
+        //await identifyNewMetadata(sourcePath, targetPath);
+        //await sanitizeMetadata();
         await generateDeployPackages();
         //await deployPackages();
         //await postDeploy();
