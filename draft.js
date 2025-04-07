@@ -200,7 +200,7 @@ const sanitizeMetadata = async () => {
         // Flow Definitions: remove <activeVersionNumber>
         if (relativePath.includes(path.join('flowDefinitions', ''))) {
             const activeVersionElem = findElement(xmlObj, 'activeVersionNumber');
-            if (activeVersionElem) {
+            if (!activeVersionElem) {
                 continue;//já está inativado
             }
             originalStates[relativePath] = { type: 'FlowDefinition', originalValue: activeVersionElem.elements[0].text };
