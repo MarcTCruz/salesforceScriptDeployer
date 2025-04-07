@@ -7,7 +7,7 @@
  * - Estrutura concisa e fácil de ler.
  *
  * Pré-requisitos:
- *   npm install fs-extra minimist xml-js
+ *   npm install fs-extra xml-js
  */
 
 const fs = require('fs-extra');
