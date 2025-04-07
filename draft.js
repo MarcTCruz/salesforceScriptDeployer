@@ -115,6 +115,7 @@ const identifyNewMetadata = async (sourcePath, targetPath) => {
     console.log('Fase 1: Identificação de metadados novos...');
     await fs.ensureDir(NEWS_DIR);
     const sourceFiles = getAllFiles(sourcePath);
+    const copiedObjects = new Set();
 
     for (const sourceFile of sourceFiles) {
         const relativePath = path.relative(sourcePath, sourceFile);
@@ -129,13 +130,20 @@ const identifyNewMetadata = async (sourcePath, targetPath) => {
             continue; // early return: nada a fazer
         }
 
-        // Caso especial para objetos
-        if (/force-app\/main\/default\/objects\/([^\/]+)\/fields\/.+\.field-meta\.xml$/.test(relativePath)) {
-            const objectName = relativePath.match(/force-app\/main\/default\/objects\/([^\/]+)\//)[1];
+        const isObjectRegex = /force-app\/main\/default\/objects\/([^\/]+)\//;
+        // Se qualquer subdiretório de um objeto for copiado, o xml do objeto tem de ser copiado.
+        if (isObjectRegex.test(relativePath)) {
+            const objectName = relativePath.match(isObjectRegex)[1];
+            if (objectName in copiedObjects) {
+                continue;
+            }
+            
             const objectFile = path.join(sourcePath, 'force-app', 'main', 'default', 'objects', objectName, `${objectName}.object-meta.xml`);
             const objectRelative = path.relative(sourcePath, objectFile);
-            if (!fs.existsSync(path.join(NEWS_DIR, objectRelative)) && fs.existsSync(objectFile))
+            copiedObjects.add(objectName);
+            if (!fs.existsSync(path.join(NEWS_DIR, objectRelative))) {
                 await copyFileWithStructure(objectFile, sourcePath, NEWS_DIR);
+            }
         }
     }
 };
