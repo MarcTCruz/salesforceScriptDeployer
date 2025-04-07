@@ -388,8 +388,8 @@ const main = async () => {
         process.exit(1);
     }
     try {
-        //await identifyNewMetadata(sourcePath, targetPath);
-        //await sanitizeMetadata();
+        await identifyNewMetadata(sourcePath, targetPath);
+        await sanitizeMetadata();
         await generateDeployPackages();
         //await deployPackages();
         //await postDeploy();
