@@ -41,11 +41,16 @@ const areFilesDifferent = (fileA, fileB) => {
     return contentA !== contentB;
 };
 
+const fileCounterPath = filePath => filepath.endsWith('-meta.xml') ? filePath.replace('-meta.xml', '') : filePath + '-meta.xml';
 const copyFileWithStructure = async (filePath, sourceBase, destBase) => {
+    const fileCounterPart = fileCounterPath(filePath);
+
     const relativePath = path.relative(sourceBase, filePath);
     const destPath = path.join(destBase, relativePath);
+
+    const destCounterPath = fileCounterPath(destPath);
     await fs.ensureDir(path.dirname(destPath));
-    await fs.copy(filePath, destPath);
+    await Promise.all([fs.copy(filePath, destPath), fs.copy(fileCounterPart, destCounterPath).catch(() => { })]);
 };
 
 const parseXml = xmlStr =>
@@ -107,6 +112,7 @@ const processActionOverrides = xmlObj => {
     return modified;
 };
 
+
 // -------------------------------------------------------
 // Fase 1: Identificação de Metadados Novos
 // -------------------------------------------------------
@@ -115,15 +121,24 @@ const identifyNewMetadata = async (sourcePath, targetPath) => {
     await fs.ensureDir(NEWS_DIR);
     const sourceFiles = getAllFiles(sourcePath);
     const copiedObjects = new Set();
+    const copiedFiles = new Set();
 
     for (const sourceFile of sourceFiles) {
         const relativePath = path.relative(sourcePath, sourceFile);
         const targetFile = path.join(targetPath, relativePath);
+        const targetCounterPath = fileCounterPath(targetFile);
+
+        if (copiedFiles.has(relativePath)) {
+            continue;
+        }
+
         if (!fs.existsSync(targetFile)) {
             await copyFileWithStructure(sourceFile, sourcePath, NEWS_DIR);
+            copiedFiles.add(targetCounterPath);
             console.log(`Novo: ${relativePath}`);
         } else if (areFilesDifferent(sourceFile, targetFile)) {
             await copyFileWithStructure(sourceFile, sourcePath, NEWS_DIR);
+            copiedFiles.add(targetCounterPath);
             console.log(`Alterado: ${relativePath}`);
         } else {
             continue; // early return: nada a fazer
@@ -159,7 +174,7 @@ const sanitizeMetadata = async () => {
         const relativePath = path.relative(NEWS_DIR, file);
         const destSanitizedPath = path.join(SANITIZED_DIR, relativePath);
 
-        if (!file.endsWith('.xml')) {
+        if (!file.endsWith('-meta.xml')) {
             await copyFileWithStructure(file, NEWS_DIR, SANITIZED_DIR);
             continue;
         }
@@ -393,7 +408,7 @@ const main = async () => {
         await generateDeployPackages();
         //await deployPackages();
         //await postDeploy();
-        console.log('Deploy automatizado concluído com sucesso.');
+        console.log('Pacotes para deploy gerados com sucesso.');
     } catch (err) {
         console.error('Erro no processo:', err);
         process.exit(1);
