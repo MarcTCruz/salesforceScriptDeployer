@@ -276,7 +276,7 @@ const generateDeployPackages = async () => {
     // Define your packages along with an optional baseSource per package.
     const packages = {
         package1: {
-            components: ['groups', 'objects', 'customMetadata', 'queues', 'queueRoutingConfigs', 'remoteSiteSettings']
+            components: ['standardValueSets', 'groups', 'objects', 'customMetadata', 'queues', 'queueRoutingConfigs', 'remoteSiteSettings']
         },
         package2: {
             components: ['globalValueSets', 'objects']
