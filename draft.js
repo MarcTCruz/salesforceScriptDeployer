@@ -22,7 +22,6 @@ const PACKAGES_DIR = path.join(DEPLOY_STAGING, 'packages');
 const METADATA_STATES_FILE = path.join(DEPLOY_STAGING, 'metadata-original-states.json');
 
 let originalStates = {};
-
 // Helpers
 const getAllFiles = (dirPath, files = []) => {
     if (!fs.existsSync(dirPath)) return files;
@@ -36,8 +35,8 @@ const getAllFiles = (dirPath, files = []) => {
 
 const areFilesDifferent = (fileA, fileB) => {
     if (!fs.existsSync(fileB)) return true;
-    const contentA = fs.readFileSync(fileA, 'utf8').replace(/\s+/g, '');
-    const contentB = fs.readFileSync(fileB, 'utf8').replace(/\s+/g, '');
+    const contentA = fs.readFileSync(fileA, 'utf8').replace(/^\s+|\s+$/gm, '');//removes leading and trailing spaces on each line
+    const contentB = fs.readFileSync(fileB, 'utf8').replace(/^\s+|\s+$/gm, '');
     return contentA !== contentB;
 };
 
@@ -116,19 +115,56 @@ const processActionOverrides = xmlObj => {
     return modified;
 };
 
+// -------------------------------------------------------
+// NOVA FUNÇÃO: Retorna os fullName dos CustomObjects idless
+// -------------------------------------------------------
+const IGNORE_OBJECTS_FILE = path.join(DEPLOY_STAGING, 'ignoreObjects.json');
+const loadIgnoreObjects = () => {
+    if (!fs.existsSync(IGNORE_OBJECTS_FILE)) {
+        console.error(`Arquivo ${IGNORE_OBJECTS_FILE} não encontrado.`);
+        process.exit(1);
+    }
+
+    try {
+        const ignoreObjects = JSON.parse(fs.readFileSync(IGNORE_OBJECTS_FILE, 'utf8'));
+        if (!Array.isArray(ignoreObjects)) {
+            throw new Error('O arquivo ignoreObjects.json deve conter uma lista de strings.');
+        }
+        return new Set(ignoreObjects);
+    } catch (e) {
+        console.error(`Erro ao carregar ignoreObjects: ${e.message}`);
+        process.exit(1);
+    }
+};
 
 // -------------------------------------------------------
 // Fase 1: Identificação de Metadados Novos
 // -------------------------------------------------------
-const identifyNewMetadata = async (sourcePath, targetPath) => {
+const identifyNewMetadata = async (sourcePath, targetPath, ignoreObjects) => {
     console.log('Fase 1: Identificação de metadados novos...');
     await fs.ensureDir(NEWS_DIR);
     const sourceFiles = getAllFiles(sourcePath);
     const copiedObjects = new Set();
     const copiedFiles = new Set();
 
+    // Regex para identificar a pasta de um objeto.
+    const isObjectRegex = /force-app\/main\/default\/objects\/([^\/]+)\//;
+    
     for (const sourceFile of sourceFiles) {
         const relativePath = path.relative(sourcePath, sourceFile);
+
+        // Se o arquivo pertence a um objeto, verifique se o objeto estiver na lista idless.
+        if (relativePath.includes(path.join('force-app', 'main', 'default', 'objects') + path.sep)) {
+            const match = isObjectRegex.exec(relativePath);
+            if (match) {
+                const objectName = match[1];
+                if (ignoreObjects.has(objectName)) {
+                    console.log(`Ignorado objeto idless: ${relativePath}`);
+                    continue;
+                }
+            }
+        }
+
         const targetFile = path.join(targetPath, relativePath);
         const targetCounterPath = fileCounterPath(targetFile);
 
@@ -148,11 +184,10 @@ const identifyNewMetadata = async (sourcePath, targetPath) => {
             continue; // early return: nada a fazer
         }
 
-        const isObjectRegex = /force-app\/main\/default\/objects\/([^\/]+)\//;
-        // Se qualquer subdiretório de um objeto for copiado, o xml do objeto tem de ser copiado.
+        // Processa pastas de objetos para garantir que o arquivo XML do objeto seja copiado.
         if (isObjectRegex.test(relativePath)) {
             const objectName = relativePath.match(isObjectRegex)[1];
-            if (objectName in copiedObjects) {
+            if (copiedObjects.has(objectName)) {
                 continue;
             }
 
@@ -219,7 +254,7 @@ const sanitizeMetadata = async () => {
         if (relativePath.includes(path.join('flowDefinitions', ''))) {
             const activeVersionElem = findElement(xmlObj, 'activeVersionNumber');
             if (!activeVersionElem) {
-                continue;//já está inativado
+                continue; // já está inativado
             }
             originalStates[relativePath] = { type: 'FlowDefinition', originalValue: activeVersionElem.elements[0].text };
             removeElement(xmlObj, 'activeVersionNumber');
@@ -276,7 +311,7 @@ const generateDeployPackages = async () => {
     // Define your packages along with an optional baseSource per package.
     const packages = {
         package1: {
-            components: ['standardValueSets', 'groups', 'objects', 'customMetadata', 'queues', 'queueRoutingConfigs', 'remoteSiteSettings']
+            components: ['labels', 'standardValueSets', 'groups', 'objects', 'customMetadata', 'queues', 'queueRoutingConfigs', 'remoteSiteSettings']
         },
         package2: {
             components: ['globalValueSets', 'objects']
@@ -387,7 +422,19 @@ const postDeploy = async () => {
         process.exit(1);
     }
 };
-
+const wipeDirectories = async () => {
+    try {
+        await Promise.all([
+            fs.remove(NEWS_DIR),
+            fs.remove(SANITIZED_DIR),
+            fs.remove(PACKAGES_DIR)
+        ]);
+        console.log('Diretórios limpos: news, sanitized, packages');
+    } catch (err) {
+        console.error('Erro ao limpar diretórios:', err);
+        process.exit(1);
+    }
+};
 // -------------------------------------------------------
 // Função Principal
 // -------------------------------------------------------
@@ -396,22 +443,28 @@ const main = async () => {
     const { values: args } = parseArgs({
         options: {
             sourcePath: { type: 'string', short: 's' },
-            targetPath: { type: 'string', short: 't' }
+            targetPath: { type: 'string', short: 't' },
+            "target-org": { type: 'string', short: 'o' }
         }
     });
+
     const sourcePath = args.sourcePath;
     const targetPath = args.targetPath;
+    const targetOrg = args["target-org"];
 
-    if (!sourcePath || !targetPath) {
-        console.error('Uso: node deploy-metadata.js --sourcePath=<origem> --targetPath=<destino>');
+    if (!sourcePath || !targetPath || !targetOrg) {
+        console.error('Uso: node deploy-metadata.js --sourcePath=<origem> --targetPath=<destino> --target-org=<targetOrg>');
+        console.error('Exemplo: node deploy-metadata.js --sourcePath=/path/to/source --targetPath=/path/to/target --target-org=myOrg');
         process.exit(1);
     }
+
+    const idlessObjects = loadIgnoreObjects(targetOrg);
+    ignoreObjects = new Set(idlessObjects);
     try {
-        await identifyNewMetadata(sourcePath, targetPath);
+        await wipeDirectories();
+        await identifyNewMetadata(sourcePath, targetPath, ignoreObjects);
         await sanitizeMetadata();
         await generateDeployPackages();
-        //await deployPackages();
-        //await postDeploy();
         console.log('Pacotes para deploy gerados com sucesso.');
     } catch (err) {
         console.error('Erro no processo:', err);
@@ -420,7 +473,8 @@ const main = async () => {
 };
 
 main();
-//script usage: node draft.js --sourcePath=/path/to/hml/force-app/main/default --targetPath=./path/to/miniprod/force-app/main/default
+
+//script usage: node deploy-metadata.js --sourcePath=/path/to/hml/force-app/main/default --targetPath=./path/to/miniprod/force-app/main/default --target-org=<targetOrg>
 //deve ser testado os métodos:
 //await identifyNewMetadata(sourcePath, targetPath);
 //await sanitizeMetadata();
