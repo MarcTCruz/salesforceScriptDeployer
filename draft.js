@@ -41,7 +41,7 @@ const areFilesDifferent = (fileA, fileB) => {
     return contentA !== contentB;
 };
 
-const fileCounterPath = filePath => filepath.endsWith('-meta.xml') ? filePath.replace('-meta.xml', '') : filePath + '-meta.xml';
+const fileCounterPath = (filePath) => filePath.endsWith('-meta.xml') ? filePath.replace('-meta.xml', '') : filePath + '-meta.xml';
 const copyFileWithStructure = async (filePath, sourceBase, destBase) => {
     const fileCounterPart = fileCounterPath(filePath);
 
@@ -74,13 +74,17 @@ const findElement = (xmlObj, nodeName) => {
 // Remove todos os elementos com o nome dado usando uma abordagem funcional.
 const removeElements = (xmlObj, nodeName) => {
     if (!xmlObj?.elements) return false;
-    const originalLength = xmlObj.elements.length;
-    xmlObj.elements = xmlObj.elements.filter(elem => {
-        if (elem.name === nodeName) return false;
-        removeElements(elem, nodeName);
-        return true;
-    });
-    return xmlObj.elements.length !== originalLength;
+    let modified = false;
+    for (let i = xmlObj.elements.length - 1; i >= 0; i--) {
+        const elem = xmlObj.elements[i];
+        if (elem.name === nodeName) {
+            xmlObj.elements.splice(i, 1);
+            modified = true;
+        } else {
+            modified = removeElements(elem, nodeName) || modified;
+        }
+    }
+    return modified;
 };
 
 // Remove o primeiro elemento encontrado com o nome dado.
