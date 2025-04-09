@@ -2,3 +2,4 @@
 !draft.js
 !exceptionPath.json
 !.gitignore
+!.apexClassCoverageHack.js

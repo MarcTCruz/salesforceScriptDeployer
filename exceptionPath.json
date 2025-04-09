@@ -28,7 +28,7 @@
             "CallOut_SAP_SAPECC_PernValidation.cls",
             "CallOut_SAP_SAPECC_PernValidation.cls-meta.xml",
             "CallOut_SAP_SAPECC_Verifyemployeeinfo.cls",
-            "Callout_SAP_SAPECC_Verifyemployeeinfo.cls-meta.xml",
+            "CallOut_SAP_SAPECC_Verifyemployeeinfo.cls-meta.xml",
             "CallOut_SendPulse_Setup.cls",
             "CallOut_SendPulse_Setup.cls-meta.xml",
             "CallOutSetup2.cls",
@@ -38,7 +38,12 @@
             "CallOutHandler2.cls",
             "CallOutHandler2.cls-meta.xml",
             "CallOutHandler2Test.cls",
-            "CallOutHandler2Test.cls-meta.xml"
+            "CallOutHandler2Test.cls-meta.xml",
+            "AtribuiRegraCompartilhamentoTest.cls-meta.xml",
+            "CompartilharContaObjetosFilhosTest.cls-meta.xml",
+            "ContasContendoCNPJDeLeadsController.cls-meta.xml",
+            "ContasContendoCNPJDeLeadsTest.cls-meta.xml",
+            "ConversaoLeadControllerTest.cls-meta.xml"            
         ]
     }
 }

@@ -14,6 +14,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const { execSync } = require('child_process');
 const convert = require('xml-js');
+const { injectHack } = require('./apexClassCoverageHack');
 
 const DEPLOY_STAGING = path.join(process.cwd(), 'deploy-staging');
 const NEWS_DIR = path.join(DEPLOY_STAGING, 'news', 'force-app', 'main', 'default');
@@ -320,6 +321,16 @@ const sanitizeMetadata = async () => {
 
         if (!file.endsWith('-meta.xml')) {
             await copyFileWithStructure(file, NEWS_DIR, SANITIZED_DIR);
+            const sanitizedFile = path.join(SANITIZED_DIR, relativePath);
+
+            if (relativePath.includes(path.join('classes', ''))) {
+                const isTest = !await injectHack(sanitizedFile);
+                if (isTest) {
+                    fs.unlink(sanitizedFile);
+                    continue;
+                }
+            }
+
             continue;
         }
 
