@@ -141,6 +141,37 @@ const loadIgnoreObjects = (IGNORE_OBJECTS_FILE) => {
     }
 };
 
+const os = require('os');
+class ConcurrencyManager {
+    constructor(maxConcurrent) {
+        this.maxConcurrent = maxConcurrent;
+        this.currentlyRunning = 0;
+        this.queue = [];
+        this.allTasksCompleted = new Promise(resolve => this.resolveAllTasks = resolve);
+    }
+
+    async run(task) {
+        if (this.currentlyRunning >= this.maxConcurrent) {
+            await new Promise(resolve => this.queue.push(resolve));
+        }
+        this.currentlyRunning++;
+        try {
+            await task();
+        } finally {
+            this.currentlyRunning--;
+            if (this.queue.length > 0) {
+                const next = this.queue.shift();
+                next();
+            } else if (this.currentlyRunning === 0) {
+                this.resolveAllTasks();
+            }
+        }
+    }
+
+    async waitForAll() {
+        await this.allTasksCompleted;
+    }
+}
 // -------------------------------------------------------
 // Fase 1: Identificação de Metadados Novos
 // -------------------------------------------------------
@@ -151,13 +182,12 @@ const identifyNewMetadata = async (sourcePath, targetPath, ignoreObjects) => {
     const copiedObjects = new Set();
     const copiedFiles = new Set();
 
-    // Regex para identificar a pasta de um objeto.
     const isObjectRegex = /force-app\/main\/default\/objects\/([^\/]+)\//;
+    const concurrencyManager = new ConcurrencyManager(os.cpus().length);
 
     for (const sourceFile of sourceFiles) {
         const relativePath = path.relative(sourcePath, sourceFile);
 
-        // Se o arquivo pertence a um objeto, verifique se o objeto estiver na lista idless.
         if (relativePath.includes(path.join('force-app', 'main', 'default', 'objects') + path.sep)) {
             const match = isObjectRegex.exec(relativePath);
             if (match) {
@@ -171,7 +201,7 @@ const identifyNewMetadata = async (sourcePath, targetPath, ignoreObjects) => {
 
         if (relativePath.includes(path.join('standardValueSets', '')) && sourceFile.endsWith('.xml')) {
             const xmlContent = fs.readFileSync(sourceFile, 'utf8');
-            if (false === xmlContent.includes('<standardValue>')) {
+            if (!xmlContent.includes('<standardValue>')) {
                 console.log(`Ignorando arquivo com <standardValue>: ${relativePath}`);
                 continue;
             }
@@ -193,18 +223,22 @@ const identifyNewMetadata = async (sourcePath, targetPath, ignoreObjects) => {
         }
 
         if (!fs.existsSync(targetFile)) {
-            await copyFileWithStructure(sourceFile, sourcePath, NEWS_DIR);
             copiedFiles.add(targetCounterPath);
-            console.log(`Novo: ${relativePath}`);
+            const copyTask = async () => {
+                await copyFileWithStructure(sourceFile, sourcePath, NEWS_DIR);
+                console.log(`Novo: ${relativePath}`);
+            };
+            concurrencyManager.run(copyTask);
         } else if (areFilesDifferent(sourceFile, targetFile)) {
-            await copyFileWithStructure(sourceFile, sourcePath, NEWS_DIR);
-            copiedFiles.add(targetCounterPath);
-            console.log(`Alterado: ${relativePath}`);
+            const copyTask = async () => {
+                await copyFileWithStructure(sourceFile, sourcePath, NEWS_DIR);
+                console.log(`Alterado: ${relativePath}`);
+            };
+            concurrencyManager.run(copyTask);
         } else {
-            continue; // early return: nada a fazer
+            continue;
         }
 
-        // Processa pastas de objetos para garantir que o arquivo XML do objeto seja copiado.
         if (isObjectRegex.test(relativePath)) {
             const objectName = relativePath.match(isObjectRegex)[1];
             if (copiedObjects.has(objectName)) {
@@ -215,10 +249,14 @@ const identifyNewMetadata = async (sourcePath, targetPath, ignoreObjects) => {
             const objectRelative = path.relative(sourcePath, objectFile);
             copiedObjects.add(objectName);
             if (!fs.existsSync(path.join(NEWS_DIR, objectRelative))) {
-                await copyFileWithStructure(objectFile, sourcePath, NEWS_DIR);
+                concurrencyManager.run(async () => {
+                    await copyFileWithStructure(objectFile, sourcePath, NEWS_DIR);
+                });
             }
         }
     }
+    
+    await concurrencyManager.waitForAll();
 };
 
 // -------------------------------------------------------
@@ -341,70 +379,70 @@ const sanitizeMetadata = async () => {
 // -------------------------------------------------------
 const generateDeployPackages = async () => {
     console.log('Fase 3: Gerando pacotes de deploy...');
-// Define your packages along with an optional baseSource per package.
-const packages = {
-    package0: {
-        components: ['permissionsets', 'customPermissions']
-    },
-    package1: {
-        components: ['labels', 'standardValueSets', 'groups', 'objects', 'customMetadata', 'queues', 'queueRoutingConfigs', 'remoteSiteSettings']
-    },
-    package2: {
-        components: ['globalValueSets', 'objects']
-    },
-    package3: {
-        components: ['tabs', 'classes', 'triggers']
-    },
-    package4: {
-        components: ['flows', 'flowDefinitions', 'Email', 'labels']
-    },
-    package5: {
-        components: ['SharingRules', 'workflows', 'assignmentRules', 'approvalProcesses']
-    },
-    package6: {
-        components: ['lwc', 'aura', 'pages']
-    },
-    package7: {
-        components: ['staticresources']
-    },
-    package8: {
-        components: ['quickActions', 'layouts', 'flexiPages']
-    },
-    package9: {
-        components: ['applications']
-    },
-    package10: {
-        baseSource: NEWS_DIR,
-        components: ['objects']
-    },
-    package11: {
-        baseSource: NEWS_DIR,
-        components: ['profiles', 'permissionsets', 'customPermissions', 'permissionsetgroups']
-    },
-    package12: {
-        components: ['Roles']
-    },
-    package13: {
-        components: ['objectTranslations']
-    }
-};
-
-// Process each package using the defined baseSource (default to SANITIZED_DIR)
-for (const [pkgName, { components, baseSource = SANITIZED_DIR }] of Object.entries(packages)) {
-    const pkgDir = path.join(PACKAGES_DIR, pkgName, 'force-app', 'main', 'default');
-    await fs.ensureDir(pkgDir);
-    console.log(`Criando pacote ${pkgName} com [${components.join(', ')}] usando base "${baseSource === NEWS_DIR ? 'NEWS_DIR' : 'SANITIZED_DIR'}"`);
-
-    // For each component, copy its folder structure from the specified baseSource
-    for (const comp of components) {
-        const compSourceDir = path.join(baseSource, comp);
-        if (!fs.existsSync(compSourceDir)) {
-            continue;
+    // Define your packages along with an optional baseSource per package.
+    const packages = {
+        package0: {
+            components: ['permissionsets', 'customPermissions']
+        },
+        package1: {
+            components: ['labels', 'standardValueSets', 'groups', 'objects', 'customMetadata', 'queues', 'queueRoutingConfigs', 'remoteSiteSettings']
+        },
+        package2: {
+            components: ['globalValueSets', 'objects']
+        },
+        package3: {
+            components: ['tabs', 'classes', 'triggers']
+        },
+        package4: {
+            components: ['flows', 'flowDefinitions', 'Email', 'labels']
+        },
+        package5: {
+            components: ['SharingRules', 'workflows', 'assignmentRules', 'approvalProcesses']
+        },
+        package6: {
+            components: ['lwc', 'aura', 'pages']
+        },
+        package7: {
+            components: ['staticresources']
+        },
+        package8: {
+            components: ['quickActions', 'layouts', 'flexiPages']
+        },
+        package9: {
+            components: ['applications']
+        },
+        package10: {
+            baseSource: NEWS_DIR,
+            components: ['objects']
+        },
+        package11: {
+            baseSource: NEWS_DIR,
+            components: ['profiles', 'permissionsets', 'customPermissions', 'permissionsetgroups']
+        },
+        package12: {
+            components: ['Roles']
+        },
+        package13: {
+            components: ['objectTranslations']
         }
-        const destDir = path.join(pkgDir, comp);
-        await fs.copy(compSourceDir, destDir);
+    };
+
+    // Process each package using the defined baseSource (default to SANITIZED_DIR)
+    for (const [pkgName, { components, baseSource = SANITIZED_DIR }] of Object.entries(packages)) {
+        const pkgDir = path.join(PACKAGES_DIR, pkgName, 'force-app', 'main', 'default');
+        await fs.ensureDir(pkgDir);
+        console.log(`Criando pacote ${pkgName} com [${components.join(', ')}] usando base "${baseSource === NEWS_DIR ? 'NEWS_DIR' : 'SANITIZED_DIR'}"`);
+
+        // For each component, copy its folder structure from the specified baseSource
+        for (const comp of components) {
+            const compSourceDir = path.join(baseSource, comp);
+            if (!fs.existsSync(compSourceDir)) {
+                continue;
+            }
+            const destDir = path.join(pkgDir, comp);
+            await fs.copy(compSourceDir, destDir);
+        }
     }
-}
 };
 
 // -------------------------------------------------------
@@ -513,7 +551,7 @@ const main = async () => {
 
 main();
 
-//script usage: node deploy-metadata.js --sourcePath=/path/to/hml/force-app/main/default --targetPath=./path/to/miniprod/force-app/main/default --target-org=<targetOrg>
+//script usage: node deploy-metadata.js --sourcePath=/path/to/hml/force-app/main/default --targetPath=./path/to/miniprod/force-app/main/default
 //deve ser testado os métodos:
 //await identifyNewMetadata(sourcePath, targetPath);
 //await sanitizeMetadata();
