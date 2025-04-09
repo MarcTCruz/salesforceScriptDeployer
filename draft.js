@@ -216,14 +216,13 @@ const identifyNewMetadata = async (sourcePath, targetPath, ignoreObjects) => {
         }
 
         const targetFile = path.join(targetPath, relativePath);
-        const targetCounterPath = fileCounterPath(targetFile);
+        const sourceFileCounterPath = fileCounterPath(sourceFile);
 
-        if (copiedFiles.has(relativePath)) {
+        if (copiedFiles.has(targetFile)) {
             continue;
         }
-
+        copiedFiles.add(sourceFileCounterPath);
         if (!fs.existsSync(targetFile)) {
-            copiedFiles.add(targetCounterPath);
             const copyTask = async () => {
                 await copyFileWithStructure(sourceFile, sourcePath, NEWS_DIR);
                 console.log(`Novo: ${relativePath}`);
@@ -255,7 +254,7 @@ const identifyNewMetadata = async (sourcePath, targetPath, ignoreObjects) => {
             }
         }
     }
-    
+
     await concurrencyManager.waitForAll();
 };
 
@@ -294,9 +293,12 @@ const sanitizeMetadata = async () => {
         let modified = false;
 
         if (relativePath.includes(path.join('permissionsets', ''))) {
-            xmlContent = '<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata"></PermissionSet>';
-            modified = true;
-            console.log(`Corpo do PermissionSet removido: ${relativePath}`);
+            const permissionSetElem = findElement(xmlObj, 'PermissionSet');
+            if (permissionSetElem) {
+                permissionSetElem.elements = [];
+                modified = true;
+                console.log(`Corpo do PermissionSet removido: ${relativePath}`);
+            }
         }
 
         // Validation Rules: desativa se <active> estiver true
@@ -319,6 +321,12 @@ const sanitizeMetadata = async () => {
         // Flows: remover <areMetricsLoggedToDataCloud>
         if (relativePath.includes(path.join('flows', ''))) {
             modified = removeElements(xmlObj, 'areMetricsLoggedToDataCloud') || modified;
+            if (modified) console.log(`Elementos <areMetricsLoggedToDataCloud> removidos: ${relativePath}`);
+        }
+
+        // queueRoutingConfigs: remover <capacityType>
+        if (relativePath.includes(path.join('queueRoutingConfigs', ''))) {
+            modified = removeElements(xmlObj, 'capacityType') || modified;
             if (modified) console.log(`Elementos <areMetricsLoggedToDataCloud> removidos: ${relativePath}`);
         }
 
@@ -388,7 +396,7 @@ const generateDeployPackages = async () => {
             components: ['labels', 'standardValueSets', 'groups', 'objects', 'customMetadata', 'queues', 'queueRoutingConfigs', 'remoteSiteSettings']
         },
         package2: {
-            components: ['globalValueSets', 'objects']
+            components: ['globalValueSets']
         },
         package3: {
             components: ['tabs', 'classes', 'triggers']
