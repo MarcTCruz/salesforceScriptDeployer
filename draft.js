@@ -16,8 +16,8 @@ const { execSync } = require('child_process');
 const convert = require('xml-js');
 
 const DEPLOY_STAGING = path.join(process.cwd(), 'deploy-staging');
-const NEWS_DIR = path.join(DEPLOY_STAGING, 'news', 'force-app', 'main');
-const SANITIZED_DIR = path.join(DEPLOY_STAGING, 'sanitized', 'force-app', 'main');
+const NEWS_DIR = path.join(DEPLOY_STAGING, 'news', 'force-app', 'main', 'default');
+const SANITIZED_DIR = path.join(DEPLOY_STAGING, 'sanitized', 'force-app', 'main', 'default');
 const PACKAGES_DIR = path.join(DEPLOY_STAGING, 'packages');
 const METADATA_STATES_FILE = path.join(DEPLOY_STAGING, 'metadata-original-states.json');
 
@@ -172,10 +172,58 @@ class ConcurrencyManager {
         await this.allTasksCompleted;
     }
 }
+
+const loadExceptionPaths = (exceptionPathFile) => {
+    if (!fs.existsSync(exceptionPathFile)) {
+        console.error(`Arquivo ${exceptionPathFile} não encontrado.`);
+        process.exit(1);
+    }
+
+    try {
+        const exceptionPaths = JSON.parse(fs.readFileSync(exceptionPathFile, 'utf8'));
+        const parsedExceptions = {};
+
+        for (const [key, { ignoredPaths }] of Object.entries(exceptionPaths)) {
+            parsedExceptions[key] = ignoredPaths.map(path => {
+                // If the pattern starts with a "/" assume it is a regex literal.
+                if (path.startsWith('/')) {
+                    // Find the last slash – characters between the first and last slash are taken as the regex pattern; what's after is treated as flags.
+                    const lastSlashIndex = path.lastIndexOf('/');
+                    const patternBody = path.slice(1, lastSlashIndex);
+                    const flags = path.slice(lastSlashIndex + 1); // This could be empty.
+                    return new RegExp(patternBody, flags);
+                } else {
+                    // Otherwise, treat it as plain text by escaping regex characters.
+                    return path;
+                }
+            });
+        }
+
+        return parsedExceptions;
+    } catch (e) {
+        console.error(`Erro ao carregar exceptionPath: ${e.message}`);
+        process.exit(1);
+    }
+};
+
+const shouldIgnoreFile = (relativePath, exceptions) => {
+    for (const [key, patterns] of Object.entries(exceptions)) {
+        if (relativePath.includes(key)) {
+            for (const pattern of patterns) {
+                if (pattern instanceof RegExp && pattern.test(relativePath)) {
+                    return true;
+                } else if (typeof pattern === 'string' && relativePath.endsWith(pattern)) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+};
 // -------------------------------------------------------
 // Fase 1: Identificação de Metadados Novos
 // -------------------------------------------------------
-const identifyNewMetadata = async (sourcePath, targetPath, ignoreObjects) => {
+const identifyNewMetadata = async ({ sourcePath, targetPath, debug, exceptions }) => {
     console.log('Fase 1: Identificação de metadados novos...');
     await fs.ensureDir(NEWS_DIR);
     const sourceFiles = getAllFiles(sourcePath);
@@ -188,15 +236,9 @@ const identifyNewMetadata = async (sourcePath, targetPath, ignoreObjects) => {
     for (const sourceFile of sourceFiles) {
         const relativePath = path.relative(sourcePath, sourceFile);
 
-        if (relativePath.includes(path.join('force-app', 'main', 'default', 'objects') + path.sep)) {
-            const match = isObjectRegex.exec(relativePath);
-            if (match) {
-                const objectName = match[1];
-                if (ignoreObjects.has(objectName)) {
-                    console.log(`Ignorado conforme ignoreObjects.json: ${relativePath}`);
-                    continue;
-                }
-            }
+        if (shouldIgnoreFile(relativePath, exceptions)) {
+            console.log(`Ignorado conforme exceptionPath.json: ${relativePath}`);
+            continue;
         }
 
         if (relativePath.includes(path.join('standardValueSets', '')) && sourceFile.endsWith('.xml')) {
@@ -225,13 +267,13 @@ const identifyNewMetadata = async (sourcePath, targetPath, ignoreObjects) => {
         if (!fs.existsSync(targetFile)) {
             const copyTask = async () => {
                 await copyFileWithStructure(sourceFile, sourcePath, NEWS_DIR);
-                console.log(`Novo: ${relativePath}`);
+                debug && console.log(`Novo: ${relativePath}`);
             };
             concurrencyManager.run(copyTask);
         } else if (areFilesDifferent(sourceFile, targetFile)) {
             const copyTask = async () => {
                 await copyFileWithStructure(sourceFile, sourcePath, NEWS_DIR);
-                console.log(`Alterado: ${relativePath}`);
+                debug && console.log(`Alterado: ${relativePath}`);
             };
             concurrencyManager.run(copyTask);
         } else {
@@ -552,25 +594,25 @@ const main = async () => {
         options: {
             sourcePath: { type: 'string', short: 's' },
             targetPath: { type: 'string', short: 't' },
+            debug: { type: 'boolean', short: 'd' }
         }
     });
 
     const sourcePath = args.sourcePath;
     const targetPath = args.targetPath;
+    const debug = args.debug;
 
     if (!sourcePath || !targetPath) {
         console.error('Uso: node deploy-metadata.js --sourcePath=<origem> --targetPath=<destino>');
         console.error('Exemplo: node deploy-metadata.js --sourcePath=/path/to/source --targetPath=/path/to/target');
         process.exit(1);
     }
-
-    const IGNORE_OBJECTS_FILE = path.join(process.cwd(), 'ignoreObjects.json');
-    const idlessObjects = loadIgnoreObjects(IGNORE_OBJECTS_FILE);
-    ignoreObjects = new Set(idlessObjects);
+    const EXCEPTION_PATH_FILE = path.join(process.cwd(), 'exceptionPath.json');
+    const exceptions = loadExceptionPaths(EXCEPTION_PATH_FILE);
     try {
         ensureSfdxProjectJson();
         await wipeDirectories();
-        await identifyNewMetadata(sourcePath, targetPath, ignoreObjects);
+        await identifyNewMetadata({ sourcePath, targetPath, debug, exceptions });
         await sanitizeMetadata();
         await generateDeployPackages();
         console.log('Pacotes para deploy gerados com sucesso.');
