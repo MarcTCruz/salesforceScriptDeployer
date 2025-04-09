@@ -295,7 +295,7 @@ const sanitizeMetadata = async () => {
         if (relativePath.includes(path.join('permissionsets', ''))) {
             const permissionSetElem = findElement(xmlObj, 'PermissionSet');
             if (permissionSetElem) {
-                permissionSetElem.elements = [];
+                permissionSetElem.elements = permissionSetElem.elements.filter(elem => elem.name === 'label');
                 modified = true;
                 console.log(`Corpo do PermissionSet removido: ${relativePath}`);
             }
@@ -540,7 +540,7 @@ const ensureSfdxProjectJson = async () => {
         await fs.writeJson(sfdxProjectPath, sfdxProjectContent, { spaces: 2 });
         console.log('sfdx-project.json created.');
     } else {
-        console.log('sfdx-project.json already exists.');
+        console.log('Skipping sfdx-project.json creation...');
     }
 };
 // -------------------------------------------------------
@@ -574,6 +574,7 @@ const main = async () => {
         await sanitizeMetadata();
         await generateDeployPackages();
         console.log('Pacotes para deploy gerados com sucesso.');
+        console.log('Versão 2025-09-04:11:34');
     } catch (err) {
         console.error('Erro no processo:', err);
         process.exit(1);
