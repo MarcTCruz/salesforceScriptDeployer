@@ -109,7 +109,7 @@ const processActionOverrides = xmlObj => {
                 return false;
             }
             const actionName = findElement(elem, 'actionName');
-            if (typeElem && typeElem.elements[0].text in ['ResumeBilling']) {
+            if (typeElem && typeElem.elements[0].text in ['ResumeBilling', 'SuspendBilling']) {
                 modified = true;
                 return false;
             }
@@ -123,8 +123,7 @@ const processActionOverrides = xmlObj => {
 // -------------------------------------------------------
 // NOVA FUNÇÃO: Retorna os fullName dos CustomObjects idless
 // -------------------------------------------------------
-const IGNORE_OBJECTS_FILE = path.join(DEPLOY_STAGING, 'ignoreObjects.json');
-const loadIgnoreObjects = () => {
+const loadIgnoreObjects = (IGNORE_OBJECTS_FILE) => {
     if (!fs.existsSync(IGNORE_OBJECTS_FILE)) {
         console.error(`Arquivo ${IGNORE_OBJECTS_FILE} não encontrado.`);
         process.exit(1);
@@ -342,9 +341,6 @@ const sanitizeMetadata = async () => {
 // -------------------------------------------------------
 const generateDeployPackages = async () => {
     console.log('Fase 3: Gerando pacotes de deploy...');
-
-        </div >
-    );
 // Define your packages along with an optional baseSource per package.
 const packages = {
     package0: {
@@ -488,21 +484,20 @@ const main = async () => {
         options: {
             sourcePath: { type: 'string', short: 's' },
             targetPath: { type: 'string', short: 't' },
-            "target-org": { type: 'string', short: 'o' }
         }
     });
 
     const sourcePath = args.sourcePath;
     const targetPath = args.targetPath;
-    const targetOrg = args["target-org"];
 
-    if (!sourcePath || !targetPath || !targetOrg) {
-        console.error('Uso: node deploy-metadata.js --sourcePath=<origem> --targetPath=<destino> --target-org=<targetOrg>');
-        console.error('Exemplo: node deploy-metadata.js --sourcePath=/path/to/source --targetPath=/path/to/target --target-org=myOrg');
+    if (!sourcePath || !targetPath) {
+        console.error('Uso: node deploy-metadata.js --sourcePath=<origem> --targetPath=<destino>');
+        console.error('Exemplo: node deploy-metadata.js --sourcePath=/path/to/source --targetPath=/path/to/target');
         process.exit(1);
     }
 
-    const idlessObjects = loadIgnoreObjects(targetOrg);
+    const IGNORE_OBJECTS_FILE = path.join(process.cwd(), 'ignoreObjects.json');
+    const idlessObjects = loadIgnoreObjects(IGNORE_OBJECTS_FILE);
     ignoreObjects = new Set(idlessObjects);
     try {
         await wipeDirectories();
