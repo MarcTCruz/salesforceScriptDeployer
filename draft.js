@@ -312,13 +312,18 @@ const sanitizeMetadata = async () => {
     for (const file of newsFiles) {
         const relativePath = path.relative(NEWS_DIR, file);
         const destSanitizedPath = path.join(SANITIZED_DIR, relativePath);
+        const classCounterPath = fileCounterPath(destSanitizedPath);
+        const testClassesCounterSet = new Set();
 
         // do not copy webLinks under objects
         if (relativePath.includes(path.join('objects', '')) && relativePath.includes(path.join('webLinks', ''))) {
             console.log(`Removendo webLinks: ${relativePath}`);
             continue; // Skip copying this file
         }
-
+        if(testClassesCounterSet.has(classCounterPath)) {
+            continue;
+        }
+        
         if (!file.endsWith('-meta.xml')) {
             await copyFileWithStructure(file, NEWS_DIR, SANITIZED_DIR);
             const sanitizedFile = path.join(SANITIZED_DIR, relativePath);
@@ -326,6 +331,7 @@ const sanitizeMetadata = async () => {
             if (relativePath.includes(path.join('classes', ''))) {
                 const isTest = !await injectHack(sanitizedFile);
                 if (isTest) {
+                    testClassesCounterSet.add(classCounterPath);
                     fs.unlink(sanitizedFile);
                     continue;
                 }
@@ -452,7 +458,7 @@ const generateDeployPackages = async () => {
             components: ['globalValueSets']
         },
         package3: {
-            components: ['tabs', 'classes', 'triggers']
+            components: ['tabs', 'classes', 'triggers', 'pages', 'lwc', 'aura']
         },
         package4: {
             components: ['flows', 'flowDefinitions', 'Email', 'labels']
@@ -461,7 +467,7 @@ const generateDeployPackages = async () => {
             components: ['SharingRules', 'workflows', 'assignmentRules', 'approvalProcesses']
         },
         package6: {
-            components: ['lwc', 'aura', 'pages']
+            components: []
         },
         package7: {
             components: ['staticresources']
