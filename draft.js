@@ -513,6 +513,28 @@ const wipeDirectories = async () => {
         process.exit(1);
     }
 };
+
+const ensureSfdxProjectJson = async () => {
+    const sfdxProjectPath = path.join(process.cwd(), 'sfdx-project.json');
+    if (!fs.existsSync(sfdxProjectPath)) {
+        const sfdxProjectContent = {
+            packageDirectories: [
+                {
+                    path: ".",
+                    default: true
+                }
+            ],
+            name: "RTFYUIOPIUIYYTUIOPTYUIO",
+            namespace: "",
+            sfdcLoginUrl: "https://login.salesforce.com",
+            sourceApiVersion: "62.0"
+        };
+        await fs.writeJson(sfdxProjectPath, sfdxProjectContent, { spaces: 2 });
+        console.log('sfdx-project.json created.');
+    } else {
+        console.log('sfdx-project.json already exists.');
+    }
+};
 // -------------------------------------------------------
 // Função Principal
 // -------------------------------------------------------
@@ -538,6 +560,7 @@ const main = async () => {
     const idlessObjects = loadIgnoreObjects(IGNORE_OBJECTS_FILE);
     ignoreObjects = new Set(idlessObjects);
     try {
+        ensureSfdxProjectJson();
         await wipeDirectories();
         await identifyNewMetadata(sourcePath, targetPath, ignoreObjects);
         await sanitizeMetadata();
