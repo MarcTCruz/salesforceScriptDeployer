@@ -108,6 +108,11 @@ const processActionOverrides = xmlObj => {
                 modified = true;
                 return false;
             }
+            const actionName = findElement(elem, 'actionName');
+            if (typeElem && typeElem.elements[0].text in ['ResumeBilling']) {
+                modified = true;
+                return false;
+            }
         }
         modified = processActionOverrides(elem) || modified;
         return true;
@@ -149,7 +154,7 @@ const identifyNewMetadata = async (sourcePath, targetPath, ignoreObjects) => {
 
     // Regex para identificar a pasta de um objeto.
     const isObjectRegex = /force-app\/main\/default\/objects\/([^\/]+)\//;
-    
+
     for (const sourceFile of sourceFiles) {
         const relativePath = path.relative(sourcePath, sourceFile);
 
@@ -159,9 +164,25 @@ const identifyNewMetadata = async (sourcePath, targetPath, ignoreObjects) => {
             if (match) {
                 const objectName = match[1];
                 if (ignoreObjects.has(objectName)) {
-                    console.log(`Ignorado objeto idless: ${relativePath}`);
+                    console.log(`Ignorado conforme ignoreObjects.json: ${relativePath}`);
                     continue;
                 }
+            }
+        }
+
+        if (relativePath.includes(path.join('standardValueSets', '')) && sourceFile.endsWith('.xml')) {
+            const xmlContent = fs.readFileSync(sourceFile, 'utf8');
+            if (false === xmlContent.includes('<standardValue>')) {
+                console.log(`Ignorando arquivo com <standardValue>: ${relativePath}`);
+                continue;
+            }
+        }
+
+        if (relativePath.includes(path.join('objects', '')) && relativePath.includes(path.join('listViews', '')) && sourceFile.endsWith('-meta.xml')) {
+            const xmlContent = fs.readFileSync(sourceFile, 'utf8');
+            if (xmlContent.includes('<filterScope>Mine</filterScope>')) {
+                console.log(`Ignorando arquivo com <filterScope>Mine</filterScope>: ${relativePath}`);
+                continue;
             }
         }
 
@@ -213,6 +234,12 @@ const sanitizeMetadata = async () => {
         const relativePath = path.relative(NEWS_DIR, file);
         const destSanitizedPath = path.join(SANITIZED_DIR, relativePath);
 
+        // do not copy webLinks under objects
+        if (relativePath.includes(path.join('objects', '')) && relativePath.includes(path.join('webLinks', ''))) {
+            console.log(`Removendo webLinks: ${relativePath}`);
+            continue; // Skip copying this file
+        }
+
         if (!file.endsWith('-meta.xml')) {
             await copyFileWithStructure(file, NEWS_DIR, SANITIZED_DIR);
             continue;
@@ -229,6 +256,12 @@ const sanitizeMetadata = async () => {
 
         let modified = false;
 
+        if (relativePath.includes(path.join('permissionsets', ''))) {
+            xmlContent = '<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata"></PermissionSet>';
+            modified = true;
+            console.log(`Corpo do PermissionSet removido: ${relativePath}`);
+        }
+
         // Validation Rules: desativa se <active> estiver true
         if (relativePath.includes(path.join('objects', '')) && relativePath.includes(path.join('validationRules', ''))) {
             const ruleElem = findElement(xmlObj, 'active');
@@ -243,6 +276,8 @@ const sanitizeMetadata = async () => {
                 console.log(`Validation rule desativada: ${relativePath}`);
             }
         }
+
+
 
         // Flows: remover <areMetricsLoggedToDataCloud>
         if (relativePath.includes(path.join('flows', ''))) {
@@ -308,63 +343,72 @@ const sanitizeMetadata = async () => {
 const generateDeployPackages = async () => {
     console.log('Fase 3: Gerando pacotes de deploy...');
 
-    // Define your packages along with an optional baseSource per package.
-    const packages = {
-        package1: {
-            components: ['labels', 'standardValueSets', 'groups', 'objects', 'customMetadata', 'queues', 'queueRoutingConfigs', 'remoteSiteSettings']
-        },
-        package2: {
-            components: ['globalValueSets', 'objects']
-        },
-        package3: {
-            components: ['tabs', 'classes', 'triggers']
-        },
-        package4: {
-            components: ['flows', 'flowDefinitions', 'Email', 'labels']
-        },
-        package5: {
-            components: ['SharingRules', 'workflows', 'assignmentRules', 'approvalProcesses']
-        },
-        package6: {
-            components: ['lwc', 'aura', 'pages']
-        },
-        package7: {
-            components: ['staticresources']
-        },
-        package8: {
-            components: ['quickActions', 'layouts', 'flexiPages', 'objectTranslations']
-        },
-        package9: {
-            components: ['applications']
-        },
-        package10: {
-            baseSource: NEWS_DIR,
-            components: ['objects']
-        },
-        package11: {
-            components: ['profiles', 'permissionsets', 'customPermissions', 'permissionsetgroups']
-        },
-        package12: {
-            components: ['Roles']
-        }
-    };
-
-    // Process each package using the defined baseSource (default to SANITIZED_DIR)
-    for (const [pkgName, { components, baseSource = SANITIZED_DIR }] of Object.entries(packages)) {
-        const pkgDir = path.join(PACKAGES_DIR, pkgName, 'force-app', 'main', 'default');
-        await fs.ensureDir(pkgDir);
-        console.log(`Criando pacote ${pkgName} com [${components.join(', ')}] usando base "${baseSource === NEWS_DIR ? 'NEWS_DIR' : 'SANITIZED_DIR'}"`);
-
-        // For each component, copy its folder structure from the specified baseSource
-        for (const comp of components) {
-            const compSourceDir = path.join(baseSource, comp);
-            if (!fs.existsSync(compSourceDir)) {
-                continue;
-            }
-            const destDir = path.join(pkgDir, comp);
-            await fs.copy(compSourceDir, destDir);
-        }
+        </div >
+    );
+// Define your packages along with an optional baseSource per package.
+const packages = {
+    package0: {
+        components: ['permissionsets', 'customPermissions']
+    },
+    package1: {
+        components: ['labels', 'standardValueSets', 'groups', 'objects', 'customMetadata', 'queues', 'queueRoutingConfigs', 'remoteSiteSettings']
+    },
+    package2: {
+        components: ['globalValueSets', 'objects']
+    },
+    package3: {
+        components: ['tabs', 'classes', 'triggers']
+    },
+    package4: {
+        components: ['flows', 'flowDefinitions', 'Email', 'labels']
+    },
+    package5: {
+        components: ['SharingRules', 'workflows', 'assignmentRules', 'approvalProcesses']
+    },
+    package6: {
+        components: ['lwc', 'aura', 'pages']
+    },
+    package7: {
+        components: ['staticresources']
+    },
+    package8: {
+        components: ['quickActions', 'layouts', 'flexiPages']
+    },
+    package9: {
+        components: ['applications']
+    },
+    package10: {
+        baseSource: NEWS_DIR,
+        components: ['objects']
+    },
+    package11: {
+        baseSource: NEWS_DIR,
+        components: ['profiles', 'permissionsets', 'customPermissions', 'permissionsetgroups']
+    },
+    package12: {
+        components: ['Roles']
+    },
+    package13: {
+        components: ['objectTranslations']
     }
+};
+
+// Process each package using the defined baseSource (default to SANITIZED_DIR)
+for (const [pkgName, { components, baseSource = SANITIZED_DIR }] of Object.entries(packages)) {
+    const pkgDir = path.join(PACKAGES_DIR, pkgName, 'force-app', 'main', 'default');
+    await fs.ensureDir(pkgDir);
+    console.log(`Criando pacote ${pkgName} com [${components.join(', ')}] usando base "${baseSource === NEWS_DIR ? 'NEWS_DIR' : 'SANITIZED_DIR'}"`);
+
+    // For each component, copy its folder structure from the specified baseSource
+    for (const comp of components) {
+        const compSourceDir = path.join(baseSource, comp);
+        if (!fs.existsSync(compSourceDir)) {
+            continue;
+        }
+        const destDir = path.join(pkgDir, comp);
+        await fs.copy(compSourceDir, destDir);
+    }
+}
 };
 
 // -------------------------------------------------------
