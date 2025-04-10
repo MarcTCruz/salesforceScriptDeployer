@@ -121,27 +121,6 @@ const processActionOverrides = xmlObj => {
     return modified;
 };
 
-// -------------------------------------------------------
-// NOVA FUNÇÃO: Retorna os fullName dos CustomObjects idless
-// -------------------------------------------------------
-const loadIgnoreObjects = (IGNORE_OBJECTS_FILE) => {
-    if (!fs.existsSync(IGNORE_OBJECTS_FILE)) {
-        console.error(`Arquivo ${IGNORE_OBJECTS_FILE} não encontrado.`);
-        process.exit(1);
-    }
-
-    try {
-        const ignoreObjects = JSON.parse(fs.readFileSync(IGNORE_OBJECTS_FILE, 'utf8'));
-        if (!Array.isArray(ignoreObjects)) {
-            throw new Error('O arquivo ignoreObjects.json deve conter uma lista de strings.');
-        }
-        return new Set(ignoreObjects);
-    } catch (e) {
-        console.error(`Erro ao carregar ignoreObjects: ${e.message}`);
-        process.exit(1);
-    }
-};
-
 const os = require('os');
 class ConcurrencyManager {
     constructor(maxConcurrent) {
@@ -208,15 +187,18 @@ const loadExceptionPaths = (exceptionPathFile) => {
 };
 
 const shouldIgnoreFile = (relativePath, exceptions) => {
-    for (const [key, patterns] of Object.entries(exceptions)) {
-        if (relativePath.includes(key)) {
-            for (const pattern of patterns) {
-                if (pattern instanceof RegExp && pattern.test(relativePath)) {
-                    return true;
-                } else if (typeof pattern === 'string' && relativePath.endsWith(pattern)) {
-                    return true;
-                }
-            }
+    const key = path.dirname(relativePath).split(path.sep).pop();
+
+    if (!exceptions[key]) {
+        return false;
+    }
+
+    for (const pattern of exceptions[key]) {
+        if (pattern instanceof RegExp && pattern.test(relativePath)) {
+            return true;
+        }
+        if (typeof pattern === 'string' && relativePath.endsWith(pattern)) {
+            return true;
         }
     }
     return false;

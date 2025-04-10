@@ -15,12 +15,14 @@
     },
     "classes": {
         "ignoredPaths": [
+            "AbstractSendTicketCallout.cls",
+            "AbstractSendTicketCallout.cls-meta.xml",
             "EinsteinBot_EmployeeBasicinfo.cls",
             "EinsteinBot_EmployeeBasicinfo.cls-meta.xml",
             "EinsteinBot_EmployeeBasicinfoTest.cls",
             "EinsteinBot_EmployeeBasicinfoTest.cls-meta.xml",
-            "EinsteinBot SendSmsTest.cls",
-            "EinsteinBot SendSmsTest.cls-meta.xml",
+            "EinsteinBot_SendSmsTest.cls",
+            "EinsteinBot_SendSmsTest.cls-meta.xml",
             "EinsteinBot_VerifyEmployeelnfo.cls",
             "EinsteinBot_VerifyEmployeelnfo.cls-meta.xml",
             "EinsteinBot_VerifyEmployeelnfoTest.cls",

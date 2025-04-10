@@ -108,13 +108,19 @@ async function injectHack(filePath) {
     // Check if the content has the @IsTest annotation (case insensitive)
     if (/[@]IsTest/i.test(withoutComments)) {
         console.log("The class is already a test (@IsTest). No injection was performed.");
-        return { isTest: true, isInterface: false };
+        return { isTest: true };
     }
 
     const isClassAnInterface = /(^|\s+)interface\s+/i.test(withoutComments.split('\n')[0]);
     if (isClassAnInterface) {
         console.log("The class is an interface. No injection was performed.");
-        return { isTest: false, isInterface: true };
+        return { isTest: false };
+    }
+
+    const isClassEnum = /(^|\s+)enum\s+/i.test(withoutComments.split('\n')[0]);
+    if (isClassEnum) {
+        console.log("The class is an enum. No injection was performed.");
+        return { isTest: false };
     }
 
     // Count non-empty lines (after removing comments)
@@ -189,7 +195,7 @@ async function injectHack(filePath) {
     };
     await Promise.all([fs.writeFile(testPath, testContent, errCb), fs.writeFile(xmlCounterPath, xmlContent, errCb)]);
     console.log(`Test class generated at: ${testPath}`);
-    return { isTest: false, isInterface: false };
+    return { isTest: false };
 }
 
 // Example usage:
