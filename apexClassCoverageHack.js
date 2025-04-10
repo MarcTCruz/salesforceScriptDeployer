@@ -42,7 +42,8 @@ async function injectHack(filePath) {
         return { isTest: true, isInterface: false };
     }
 
-    if (/s+interface\s+.*$/im.test(withoutComments)) {
+    const isClassAnInterface = /(^|\s+)interface\s+/i.test(withoutComments.split('\n')[0]);
+    if (isClassAnInterface) {
         console.log("The class is an interface. No injection was performed.");
         return { isTest: false, isInterface: true };
     }
