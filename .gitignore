@@ -3,4 +3,4 @@
 !exceptionPath.json
 !.gitignore
 !apexClassCoverageHack.js
-!listTest.js
+!listTests.js

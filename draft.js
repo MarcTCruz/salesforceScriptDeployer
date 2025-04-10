@@ -649,7 +649,7 @@ const main = async () => {
         await sanitizeMetadata(exceptionMap);
         await generateDeployPackages();
         console.log('Pacotes para deploy gerados com sucesso.');
-        console.log('Versão 2025-09-05 10:08');
+        console.log('Versão 2025-09-05 15:12');
     } catch (err) {
         console.error('Erro no processo:', err);
         process.exit(1);
