@@ -308,12 +308,11 @@ const sanitizeMetadata = async () => {
     console.log('Fase 2: Sanitização dos metadados...');
     await fs.ensureDir(SANITIZED_DIR);
     const newsFiles = getAllFiles(NEWS_DIR);
+    const testClassesCounterSet = new Set();
 
     for (const file of newsFiles) {
         const relativePath = path.relative(NEWS_DIR, file);
-        const classCounterFile = fileCounterPath(file);
         const destSanitizedPath = path.join(SANITIZED_DIR, relativePath);
-        const testClassesCounterSet = new Set();
 
         // do not copy webLinks under objects
         if (relativePath.includes(path.join('objects', '')) && relativePath.includes(path.join('webLinks', ''))) {
@@ -327,22 +326,18 @@ const sanitizeMetadata = async () => {
 
         if (!file.endsWith('-meta.xml')) {
             await copyFileWithStructure(file, NEWS_DIR, SANITIZED_DIR);
-            const sanitizedFile = path.join(SANITIZED_DIR, relativePath);
-
-        // For non-XML files, process as usual:
-        if (relativePath.includes(path.join('classes', ''))) {
-            // Presume injectHack returns an object where isTest indicates a test class
-            const { isTest, isInterface } = await injectHack(sanitizedFile);
-            if (isTest) {
-                // Add the normalized key so that both .cls and .cls-meta.xml are represented
-                testClassesCounterSet.add(fileCounterPath(file));
-                console.log(`Ignorando test class: ${relativePath}`);
-                fs.unlinkSync(sanitizedFile);              
-                continue; // Don't proceed further with this file.
+            // For non-XML files, process as usual:
+            if (relativePath.includes(path.join('classes', ''))) {
+                // Presume injectHack returns an object where isTest indicates a test class
+                const { isTest, isInterface } = await injectHack(destSanitizedPath);
+                if (isTest) {
+                    // Add the -meta.xml counterPart
+                    testClassesCounterSet.add(fileCounterPath(file));
+                    console.log(`Ignorando test class: ${relativePath}`);
+                    fs.unlink(destSanitizedPath);
+                    fs.unlink(fileCounterPath(destSanitizedPath));
+                }
             }
-        }
-
-
             continue;
         }
 
