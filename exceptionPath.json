@@ -1,4 +1,14 @@
 {
+    "triggers": {
+        "ignoredPaths": [
+            "AtualizarCamposStatus.trigger",
+            "AtualizarCamposStatus.trigger-meta.xml",
+            "ContentDistributionTrigger.trigger",
+            "ContentDistributionTrigger.trigger-meta.xml",
+            "conversaoProdutoTrigger.trigger",
+            "conversaoProdutoTrigger.trigger-meta.xml"
+        ]
+    },
     "permissionsets": {
         "ignoredPaths": [
             "Executivo_de_Vendas.permissionset-meta.xml",
@@ -47,7 +57,9 @@
         ],
         "includeTests":[
             "CreateQuoteFullControllerTest.cls", 
-            "DataFactory.cls"
+            "DataFactory.cls",
+            "ObjectUtilityForTesting.cls",
+            "AllTriggersTest.cls"
         ]
     }
 }

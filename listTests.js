@@ -21,7 +21,7 @@ function processApexFiles(directory, outputFile) {
   });
 
   // Write the list of test classes to the output file
-  fs.writeFileSync(outputFile, '--tests "' + testClasses.join('"\n --tests "') + '"', 'utf8');
+  fs.writeFileSync(outputFile, '--tests "' + testClasses.join('" "') + '"', 'utf8');
 }
 
 // Example usage

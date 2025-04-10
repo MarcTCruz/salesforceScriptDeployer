@@ -1,6 +1,6 @@
 *
+!.gitignore
 !draft.js
 !exceptionPath.json
-!.gitignore
 !apexClassCoverageHack.js
 !listTests.js
