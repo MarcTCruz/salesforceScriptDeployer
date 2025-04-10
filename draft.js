@@ -51,11 +51,11 @@ const copyFileWithStructure = async (filePath, sourceBase, destBase) => {
 
     const destCounterPath = fileCounterPath(destPath);
     const dirname = path.dirname(destPath);
-    if (false === CREATED_DIRS_SET.has(dirname)){
+    if (false === CREATED_DIRS_SET.has(dirname)) {
         CREATED_DIRS_SET.add(dirname);
         await fs.ensureDir(dirname);
     }
-    
+
     await Promise.all([fs.copy(filePath, destPath), fs.copy(fileCounterPart, destCounterPath).catch(() => { })]);
 };
 
@@ -620,7 +620,7 @@ const main = async () => {
         await sanitizeMetadata();
         await generateDeployPackages();
         console.log('Pacotes para deploy gerados com sucesso.');
-        console.log('Versão 2025-09-04:22:00');
+        console.log('Versão 2025-09-05 10:08');
     } catch (err) {
         console.error('Erro no processo:', err);
         process.exit(1);

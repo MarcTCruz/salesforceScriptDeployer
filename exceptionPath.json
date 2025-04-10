@@ -15,8 +15,6 @@
     },
     "classes": {
         "ignoredPaths": [
-            "AbstractSendTicketCallout.cls",
-            "AbstractSendTicketCallout.cls-meta.xml",
             "EinsteinBot_EmployeeBasicinfo.cls",
             "EinsteinBot_EmployeeBasicinfo.cls-meta.xml",
             "EinsteinBot_EmployeeBasicinfoTest.cls",
