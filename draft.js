@@ -41,6 +41,7 @@ const areFilesDifferent = (fileA, fileB) => {
     return contentA !== contentB;
 };
 
+const CREATED_DIRS_SET = new Set();
 const fileCounterPath = (filePath) => filePath.endsWith('-meta.xml') ? filePath.replace('-meta.xml', '') : filePath + '-meta.xml';
 const copyFileWithStructure = async (filePath, sourceBase, destBase) => {
     const fileCounterPart = fileCounterPath(filePath);
@@ -49,7 +50,12 @@ const copyFileWithStructure = async (filePath, sourceBase, destBase) => {
     const destPath = path.join(destBase, relativePath);
 
     const destCounterPath = fileCounterPath(destPath);
-    await fs.ensureDir(path.dirname(destPath));
+    const dirname = path.dirname(destPath);
+    if (false === CREATED_DIRS_SET.has(dirname)){
+        CREATED_DIRS_SET.add(dirname);
+        await fs.ensureDir(dirname);
+    }
+    
     await Promise.all([fs.copy(filePath, destPath), fs.copy(fileCounterPart, destCounterPath).catch(() => { })]);
 };
 
@@ -553,9 +559,7 @@ const postDeploy = async () => {
 const wipeDirectories = async () => {
     try {
         await Promise.all([
-            fs.remove(NEWS_DIR),
-            fs.remove(SANITIZED_DIR),
-            fs.remove(PACKAGES_DIR)
+            fs.remove(DEPLOY_STAGING)
         ]);
         console.log('Diretórios limpos: news, sanitized, packages');
     } catch (err) {
