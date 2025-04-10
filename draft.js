@@ -303,11 +303,7 @@ const identifyNewMetadata = async ({ sourcePath, targetPath, debug, exceptions }
 
 // -------------------------------------------------------
 // Fase 2: Sanitização dos Metadados Novos
-// -------------------------------------------------------
-const canonicalizeTestFile = (filePath) => {
-    // Remove the '-meta.xml' part if present.
-    return filePath.replace(/-meta\.xml$/, '');
-};
+// ------------------------------------------------------
 const sanitizeMetadata = async () => {
     console.log('Fase 2: Sanitização dos metadados...');
     await fs.ensureDir(SANITIZED_DIR);
@@ -324,29 +320,29 @@ const sanitizeMetadata = async () => {
             console.log(`Removendo webLinks: ${relativePath}`);
             continue; // Skip copying this file
         }
-        // Use the canonical key for lookups
-        const canonicalKey = canonicalizeTestFile(relativePath);
 
-        if (testClassesCounterSet.has(canonicalKey)) {
+        if (testClassesCounterSet.has(file)) {
             continue;
         }
 
+        if (!file.endsWith('-meta.xml')) {
+            await copyFileWithStructure(file, NEWS_DIR, SANITIZED_DIR);
+            const sanitizedFile = path.join(SANITIZED_DIR, relativePath);
+
         // For non-XML files, process as usual:
-        const sanitizedFile = path.join(SANITIZED_DIR, relativePath);
         if (relativePath.includes(path.join('classes', ''))) {
             // Presume injectHack returns an object where isTest indicates a test class
             const { isTest, isInterface } = await injectHack(sanitizedFile);
             if (isTest) {
                 // Add the normalized key so that both .cls and .cls-meta.xml are represented
-                testClassesCounterSet.add(canonicalKey);
+                testClassesCounterSet.add(fileCounterPath(file));
                 console.log(`Ignorando test class: ${relativePath}`);
-                fs.unlink(sanitizedFile);
+                fs.unlinkSync(sanitizedFile);              
                 continue; // Don't proceed further with this file.
             }
         }
 
-        if (!file.endsWith('-meta.xml')) {
-            await copyFileWithStructure(file, NEWS_DIR, SANITIZED_DIR);
+
             continue;
         }
 
