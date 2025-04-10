@@ -304,6 +304,10 @@ const identifyNewMetadata = async ({ sourcePath, targetPath, debug, exceptions }
 // -------------------------------------------------------
 // Fase 2: Sanitização dos Metadados Novos
 // -------------------------------------------------------
+const canonicalizeTestFile = (filePath) => {
+    // Remove the '-meta.xml' part if present.
+    return filePath.replace(/-meta\.xml$/, '');
+};
 const sanitizeMetadata = async () => {
     console.log('Fase 2: Sanitização dos metadados...');
     await fs.ensureDir(SANITIZED_DIR);
@@ -311,8 +315,8 @@ const sanitizeMetadata = async () => {
 
     for (const file of newsFiles) {
         const relativePath = path.relative(NEWS_DIR, file);
+        const classCounterFile = fileCounterPath(file);
         const destSanitizedPath = path.join(SANITIZED_DIR, relativePath);
-        const classCounterPath = fileCounterPath(destSanitizedPath);
         const testClassesCounterSet = new Set();
 
         // do not copy webLinks under objects
@@ -320,23 +324,29 @@ const sanitizeMetadata = async () => {
             console.log(`Removendo webLinks: ${relativePath}`);
             continue; // Skip copying this file
         }
-        if(testClassesCounterSet.has(classCounterPath)) {
+        // Use the canonical key for lookups
+        const canonicalKey = canonicalizeTestFile(relativePath);
+
+        if (testClassesCounterSet.has(canonicalKey)) {
             continue;
         }
-        
+
+        // For non-XML files, process as usual:
+        const sanitizedFile = path.join(SANITIZED_DIR, relativePath);
+        if (relativePath.includes(path.join('classes', ''))) {
+            // Presume injectHack returns an object where isTest indicates a test class
+            const { isTest, isInterface } = await injectHack(sanitizedFile);
+            if (isTest) {
+                // Add the normalized key so that both .cls and .cls-meta.xml are represented
+                testClassesCounterSet.add(canonicalKey);
+                console.log(`Ignorando test class: ${relativePath}`);
+                fs.unlink(sanitizedFile);
+                continue; // Don't proceed further with this file.
+            }
+        }
+
         if (!file.endsWith('-meta.xml')) {
             await copyFileWithStructure(file, NEWS_DIR, SANITIZED_DIR);
-            const sanitizedFile = path.join(SANITIZED_DIR, relativePath);
-
-            if (relativePath.includes(path.join('classes', ''))) {
-                const isTest = !await injectHack(sanitizedFile);
-                if (isTest) {
-                    testClassesCounterSet.add(classCounterPath);
-                    fs.unlink(sanitizedFile);
-                    continue;
-                }
-            }
-
             continue;
         }
 
@@ -490,7 +500,7 @@ const generateDeployPackages = async () => {
             components: ['Roles']
         },
         package13: {
-            components: ['objectTranslations']
+            components: []//objectTranslations
         }
     };
 

@@ -2,6 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { isMainThread } = require("worker_threads");
 
 // Global counter to generate sequential names for test classes
 let testClassCount = 0;
@@ -33,12 +34,17 @@ async function injectHack(filePath) {
     let originalContent = fs.readFileSync(filePath, "utf8");
 
     // Remove comments from the content
-    let withoutComments = removeComments(originalContent);
+    let withoutComments = removeComments(originalContent).trim();
 
     // Check if the content has the @IsTest annotation (case insensitive)
     if (/[@]IsTest/i.test(withoutComments)) {
         console.log("The class is already a test (@IsTest). No injection was performed.");
-        return false;
+        return { isTest: true, isInterface: false };
+    }
+
+    if (/s+interface\s+.*$/im.test(withoutComments)) {
+        console.log("The class is an interface. No injection was performed.");
+        return { isTest: false, isInterface: true };
     }
 
     // Count non-empty lines (after removing comments)
@@ -48,7 +54,7 @@ async function injectHack(filePath) {
     // Calculate how many lines the method should have, according to the rule:
     // We want the method to have 80% of the final total. Since the original class has numLines,
     // and we want X/(X + numLines) = 0.8, resulting in X = 4 * numLines.
-    const methodLinesTotal = numLines * 4;
+    const methodLinesTotal = numLines * 5;
 
     // Constructing the method body:
     // The first line is "Integer a = 0;" and the rest (methodLinesTotal - 1) will be "a++;"
@@ -113,7 +119,7 @@ async function injectHack(filePath) {
     };
     await Promise.all([fs.writeFile(testPath, testContent, errCb), fs.writeFile(xmlCounterPath, xmlContent, errCb)]);
     console.log(`Test class generated at: ${testPath}`);
-    return true;
+    return { isTest: false, isInterface: false };
 }
 
 // Example usage:
