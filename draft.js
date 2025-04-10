@@ -334,8 +334,8 @@ const sanitizeMetadata = async () => {
                     // Add the -meta.xml counterPart
                     testClassesCounterSet.add(fileCounterPath(file));
                     console.log(`Ignorando test class: ${relativePath}`);
-                    fs.unlink(destSanitizedPath);
-                    fs.unlink(fileCounterPath(destSanitizedPath));
+                    await Promise.all([fs.unlink(destSanitizedPath),
+                    fs.unlink(fileCounterPath(destSanitizedPath))]);
                 }
             }
             continue;
@@ -634,7 +634,7 @@ const main = async () => {
         await sanitizeMetadata();
         await generateDeployPackages();
         console.log('Pacotes para deploy gerados com sucesso.');
-        console.log('Versão 2025-09-04:11:34');
+        console.log('Versão 2025-09-04:22:00');
     } catch (err) {
         console.error('Erro no processo:', err);
         process.exit(1);
