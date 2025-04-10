@@ -25,4 +25,4 @@ function processApexFiles(directory, outputFile) {
 }
 
 // Example usage
-processApexFiles('deploy-staging/packages/package3/force-app/main/default/classes', './specifiedTests.txt');
+processApexFiles('./deploy-staging/packages/package3/force-app/main/default/classes', './specifiedTests.txt');

@@ -209,12 +209,18 @@ const loadExceptionPaths = (exceptionPathFile) => {
 };
 
 const isPathException = (relativePath, exceptions) => {
+    const normalizePath = (path) => path.split(/[\\/]/).slice(1).join('/');
+
     for (const pattern of exceptions) {
         if (pattern instanceof RegExp && pattern.test(relativePath)) {
             return true;
         }
-        if (typeof pattern === 'string' && relativePath.endsWith(pattern)) {
-            return true;
+        if (typeof pattern === 'string') {
+            const normalizedPath = normalizePath(relativePath);
+            const normalizedPattern = normalizePath(pattern);
+            if (normalizedPath === normalizedPattern) {
+                return true;
+            }
         }
     }
     return false;
@@ -309,7 +315,7 @@ const sanitizeMetadata = async (exceptionMap) => {
     const testClassesCounterSet = new Set();
     const concurrencyManager = new ConcurrencyManager(os.cpus().length);
     const dirCreatedSet = new Set();
-    
+
     for (const file of newsFiles) {
         concurrencyManager.run(async () => {
             const relativePath = path.relative(NEWS_DIR, file);
@@ -325,11 +331,12 @@ const sanitizeMetadata = async (exceptionMap) => {
                 return;
             }
 
+            const pathDir = path.dirname(relativePath);
             if (!file.endsWith('-meta.xml')) {
 
                 await copyFileWithStructure(file, NEWS_DIR, SANITIZED_DIR);
                 // For non-XML files, process as usual:
-                if (relativePath.includes(path.join('classes', ''))) {
+                if (pathDir === 'classes') {
                     // Presume injectHack returns an object where isTest indicates a test class
                     const { isTest } = await injectHack(destSanitizedPath);
                     const exceptionKey = path.dirname(relativePath).split(path.sep).pop().trim();
@@ -349,6 +356,10 @@ const sanitizeMetadata = async (exceptionMap) => {
                         fs.unlink(fileCounterPath(destSanitizedPath))]);
                     }
                 }
+                return;
+            }
+
+            if (pathDir === 'classes') {//class xml will eventually end up here while its counterpart is being processed above in injectHack
                 return;
             }
 
