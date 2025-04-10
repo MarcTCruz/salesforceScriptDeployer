@@ -8,17 +8,86 @@ const { isMainThread } = require("worker_threads");
 let testClassCount = 0;
 
 /**
- * Removes block and line comments from the content.
+ * Removes block and line comments from the content, but leaves intact any comment-like
+ * patterns that are inside string literals.
  *
  * @param {string} content The original content of the Apex file.
  * @returns {string} The content without comments.
  */
 function removeComments(content) {
-    // Remove block comments: /* ... */
-    let withoutBlock = content.replace(/\/\*[\s\S]*?\*\//g, "");
-    // Remove line comments: // ...
-    let withoutComments = withoutBlock.replace(/\/\/.*$/gm, "");
-    return withoutComments;
+    let result = "";
+    let inString = false;       // Are we inside a string literal?
+    let stringChar = "";        // Which quote char started the literal? (e.g. ' or ")
+    let inLineComment = false;  // Are we inside a // comment?
+    let inBlockComment = false; // Are we inside a /* */ comment?
+
+    for (let i = 0; i < content.length; i++) {
+        let current = content[i];
+        let next = content[i + 1];
+
+        // If we are inside a line comment, skip characters until newline.
+        if (inLineComment) {
+            if (current === "\n") {
+                inLineComment = false;
+                result += current;
+            }
+            continue;
+        }
+
+        // If we are inside a block comment, skip until we see the closing */
+        if (inBlockComment) {
+            if (current === "*" && next === "/") {
+                inBlockComment = false;
+                i++; // Skip the '/'
+            }
+            continue;
+        }
+
+        // If we're inside a string literal, add characters until the end of it.
+        if (inString) {
+            result += current;
+            // Check for the end of the string literal.
+            if (current === stringChar) {
+                // In Apex, you might escape a single quote inside a single-quoted string by doubling it.
+                // The code below checks if the next character is a duplicate quote.
+                if (next === stringChar) {
+                    // It's an escaped quote; add it and move past it.
+                    result += next;
+                    i++;
+                    continue;
+                }
+                inString = false;
+                stringChar = "";
+            }
+            continue;
+        }
+
+        // When not inside a string or comment, check for starting delimiters.
+        if ((current === "'" || current === '"')) {
+            inString = true;
+            stringChar = current;
+            result += current;
+            continue;
+        }
+
+        // Detect the start of a line comment.
+        if (current === "/" && next === "/") {
+            inLineComment = true;
+            i++; // Skip the next '/'
+            continue;
+        }
+
+        // Detect the start of a block comment.
+        if (current === "/" && next === "*") {
+            inBlockComment = true;
+            i++; // Skip the '*'
+            continue;
+        }
+
+        // If none of the above, just add the current character.
+        result += current;
+    }
+    return result;
 }
 
 /**
@@ -55,7 +124,7 @@ async function injectHack(filePath) {
     // Calculate how many lines the method should have, according to the rule:
     // We want the method to have 80% of the final total. Since the original class has numLines,
     // and we want X/(X + numLines) = 0.8, resulting in X = 4 * numLines.
-    const methodLinesTotal = numLines * 5;
+    const methodLinesTotal = numLines * 4;
 
     // Constructing the method body:
     // The first line is "Integer a = 0;" and the rest (methodLinesTotal - 1) will be "a++;"
