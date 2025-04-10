@@ -168,9 +168,25 @@ const loadExceptionPaths = (exceptionPathFile) => {
     try {
         const exceptionPaths = JSON.parse(fs.readFileSync(exceptionPathFile, 'utf8'));
         const parsedExceptions = {};
+        for (const [exceptionKey, rule] of Object.entries(exceptionPaths)) {
+            rule.includeTests ??= [];
+            rule.ignoredPaths ??= [];
+            parsedExceptions[exceptionKey] = { ignoredPaths: [], includeTests: [] };
+            parsedExceptions[exceptionKey].ignoredPaths = rule.ignoredPaths.map(path => {
+                // If the pattern starts with a "/" assume it is a regex literal.
+                if (path.startsWith('/')) {
+                    // Find the last slash – characters between the first and last slash are taken as the regex pattern; what's after is treated as flags.
+                    const lastSlashIndex = path.lastIndexOf('/');
+                    const patternBody = path.slice(1, lastSlashIndex);
+                    const flags = path.slice(lastSlashIndex + 1); // This could be empty.
+                    return new RegExp(patternBody, flags);
+                } else {
+                    // Otherwise, treat it as plain text by escaping regex characters.
+                    return path;
+                }
+            });
 
-        for (const [key, { ignoredPaths }] of Object.entries(exceptionPaths)) {
-            parsedExceptions[key] = ignoredPaths.map(path => {
+            parsedExceptions[exceptionKey].includeTests = rule.includeTests.map(path => {
                 // If the pattern starts with a "/" assume it is a regex literal.
                 if (path.startsWith('/')) {
                     // Find the last slash – characters between the first and last slash are taken as the regex pattern; what's after is treated as flags.
@@ -192,14 +208,8 @@ const loadExceptionPaths = (exceptionPathFile) => {
     }
 };
 
-const shouldIgnoreFile = (relativePath, exceptions) => {
-    const key = path.dirname(relativePath).split(path.sep).pop();
-
-    if (!exceptions[key]) {
-        return false;
-    }
-
-    for (const pattern of exceptions[key]) {
+const isPathException = (relativePath, exceptions) => {
+    for (const pattern of exceptions) {
         if (pattern instanceof RegExp && pattern.test(relativePath)) {
             return true;
         }
@@ -212,7 +222,7 @@ const shouldIgnoreFile = (relativePath, exceptions) => {
 // -------------------------------------------------------
 // Fase 1: Identificação de Metadados Novos
 // -------------------------------------------------------
-const identifyNewMetadata = async ({ sourcePath, targetPath, debug, exceptions }) => {
+const identifyNewMetadata = async ({ sourcePath, targetPath, debug, exceptionMap }) => {
     console.log('Fase 1: Identificação de metadados novos...');
     await fs.ensureDir(NEWS_DIR);
     const sourceFiles = getAllFiles(sourcePath);
@@ -224,8 +234,8 @@ const identifyNewMetadata = async ({ sourcePath, targetPath, debug, exceptions }
 
     for (const sourceFile of sourceFiles) {
         const relativePath = path.relative(sourcePath, sourceFile);
-
-        if (shouldIgnoreFile(relativePath, exceptions)) {
+        const exceptionKey = path.dirname(relativePath).split(path.sep).pop();
+        if (exceptionKey in exceptionMap && isPathException(relativePath, exceptionMap[exceptionKey].ignoredPaths ?? [])) {
             console.log(`Ignorado conforme exceptionPath.json: ${relativePath}`);
             continue;
         }
@@ -292,141 +302,160 @@ const identifyNewMetadata = async ({ sourcePath, targetPath, debug, exceptions }
 // -------------------------------------------------------
 // Fase 2: Sanitização dos Metadados Novos
 // ------------------------------------------------------
-const sanitizeMetadata = async () => {
+const sanitizeMetadata = async (exceptionMap) => {
     console.log('Fase 2: Sanitização dos metadados...');
     await fs.ensureDir(SANITIZED_DIR);
     const newsFiles = getAllFiles(NEWS_DIR);
     const testClassesCounterSet = new Set();
-
+    const concurrencyManager = new ConcurrencyManager(os.cpus().length);
+    const dirCreatedSet = new Set();
+    
     for (const file of newsFiles) {
-        const relativePath = path.relative(NEWS_DIR, file);
-        const destSanitizedPath = path.join(SANITIZED_DIR, relativePath);
+        concurrencyManager.run(async () => {
+            const relativePath = path.relative(NEWS_DIR, file);
+            const destSanitizedPath = path.join(SANITIZED_DIR, relativePath);
 
-        // do not copy webLinks under objects
-        if (relativePath.includes(path.join('objects', '')) && relativePath.includes(path.join('webLinks', ''))) {
-            console.log(`Removendo webLinks: ${relativePath}`);
-            continue; // Skip copying this file
-        }
+            // do not copy webLinks under objects
+            if (relativePath.includes(path.join('objects', '')) && relativePath.includes(path.join('webLinks', ''))) {
+                console.log(`Removendo webLinks: ${relativePath}`);
+                return; // Skip copying this file
+            }
 
-        if (testClassesCounterSet.has(file)) {
-            continue;
-        }
+            if (testClassesCounterSet.has(file)) {
+                return;
+            }
 
-        if (!file.endsWith('-meta.xml')) {
-            await copyFileWithStructure(file, NEWS_DIR, SANITIZED_DIR);
-            // For non-XML files, process as usual:
-            if (relativePath.includes(path.join('classes', ''))) {
-                // Presume injectHack returns an object where isTest indicates a test class
-                const { isTest, isInterface } = await injectHack(destSanitizedPath);
-                if (isTest) {
-                    // Add the -meta.xml counterPart
-                    testClassesCounterSet.add(fileCounterPath(file));
-                    console.log(`Ignorando test class: ${relativePath}`);
-                    await Promise.all([fs.unlink(destSanitizedPath),
-                    fs.unlink(fileCounterPath(destSanitizedPath))]);
+            if (!file.endsWith('-meta.xml')) {
+
+                await copyFileWithStructure(file, NEWS_DIR, SANITIZED_DIR);
+                // For non-XML files, process as usual:
+                if (relativePath.includes(path.join('classes', ''))) {
+                    // Presume injectHack returns an object where isTest indicates a test class
+                    const { isTest } = await injectHack(destSanitizedPath);
+                    const exceptionKey = path.dirname(relativePath).split(path.sep).pop().trim();
+                    const mustIncludeTest = isTest && exceptionKey in exceptionMap && isPathException(relativePath, exceptionMap[exceptionKey].includeTests ?? []);
+
+                    /*if (relativePath.includes('DataFactory')) {
+                        console.log(isTest, mustIncludeTest, exceptionMap, exceptionKey, exceptionMap);
+                        console.log(exceptionMap[exceptionKey].includeTests);
+                        process.exit()
+                    }*/
+
+                    if (isTest && false === mustIncludeTest) {
+                        // Add the -meta.xml counterPart
+                        testClassesCounterSet.add(fileCounterPath(file));
+                        console.log(`Ignorando test class: ${relativePath}`);
+                        await Promise.all([fs.unlink(destSanitizedPath),
+                        fs.unlink(fileCounterPath(destSanitizedPath))]);
+                    }
+                }
+                return;
+            }
+
+            let xmlContent = fs.readFileSync(file, 'utf8');
+            let xmlObj;
+            try {
+                xmlObj = parseXml(xmlContent);
+            } catch (error) {
+                console.error(`Erro no XML (${relativePath}): ${error.message}`);
+                process.exit(1);
+            }
+
+            let modified = false;
+
+            if (relativePath.includes(path.join('permissionsets', ''))) {
+                const permissionSetElem = findElement(xmlObj, 'PermissionSet');
+                if (permissionSetElem) {
+                    permissionSetElem.elements = permissionSetElem.elements.filter(elem => elem.name === 'label');
+                    modified = true;
+                    console.log(`Corpo do PermissionSet removido: ${relativePath}`);
                 }
             }
-            continue;
-        }
 
-        let xmlContent = fs.readFileSync(file, 'utf8');
-        let xmlObj;
-        try {
-            xmlObj = parseXml(xmlContent);
-        } catch (error) {
-            console.error(`Erro no XML (${relativePath}): ${error.message}`);
-            process.exit(1);
-        }
+            // Validation Rules: desativa se <active> estiver true
+            if (relativePath.includes(path.join('objects', '')) && relativePath.includes(path.join('validationRules', ''))) {
+                const ruleElem = findElement(xmlObj, 'active');
+                if (!ruleElem) {
+                    console.error(`Elemento <active> ausente: ${relativePath}`);
+                    process.exit(1);
+                }
+                if (ruleElem.elements[0].text === 'true') {
+                    originalStates[relativePath] = { type: 'ValidationRule', originalValue: 'true' };
+                    ruleElem.elements[0].text = 'false';
+                    modified = true;
+                    console.log(`Validation rule desativada: ${relativePath}`);
+                }
+            }
 
-        let modified = false;
 
-        if (relativePath.includes(path.join('permissionsets', ''))) {
-            const permissionSetElem = findElement(xmlObj, 'PermissionSet');
-            if (permissionSetElem) {
-                permissionSetElem.elements = permissionSetElem.elements.filter(elem => elem.name === 'label');
+
+            // Flows: remover <areMetricsLoggedToDataCloud>
+            if (relativePath.includes(path.join('flows', ''))) {
+                modified = removeElements(xmlObj, 'areMetricsLoggedToDataCloud') || modified;
+                if (modified) console.log(`Elementos <areMetricsLoggedToDataCloud> removidos: ${relativePath}`);
+            }
+
+            // queueRoutingConfigs: remover <capacityType>
+            if (relativePath.includes(path.join('queueRoutingConfigs', ''))) {
+                modified = removeElements(xmlObj, 'capacityType') || modified;
+                if (modified) console.log(`Elementos <areMetricsLoggedToDataCloud> removidos: ${relativePath}`);
+            }
+
+            // Flow Definitions: remove <activeVersionNumber>
+            if (relativePath.includes(path.join('flowDefinitions', ''))) {
+                const activeVersionElem = findElement(xmlObj, 'activeVersionNumber');
+                if (!activeVersionElem) {
+                    return; // já está inativado
+                }
+                originalStates[relativePath] = { type: 'FlowDefinition', originalValue: activeVersionElem.elements[0].text };
+                removeElement(xmlObj, 'activeVersionNumber');
                 modified = true;
-                console.log(`Corpo do PermissionSet removido: ${relativePath}`);
+                console.log(`FlowDefinition desativada: ${relativePath}`);
             }
-        }
 
-        // Validation Rules: desativa se <active> estiver true
-        if (relativePath.includes(path.join('objects', '')) && relativePath.includes(path.join('validationRules', ''))) {
-            const ruleElem = findElement(xmlObj, 'active');
-            if (!ruleElem) {
-                console.error(`Elemento <active> ausente: ${relativePath}`);
-                process.exit(1);
+            // Triggers: muda de Active para Inactive
+            if (relativePath.includes(path.join('triggers', ''))) {
+                const statusElem = findElement(xmlObj, 'status');
+                if (!statusElem) {
+                    console.error(`Elemento <status> ausente: ${relativePath}`);
+                    process.exit(1);
+                }
+                if (statusElem.elements[0].text === 'Active') {
+                    originalStates[relativePath] = { type: 'Trigger', originalValue: 'Active' };
+                    statusElem.elements[0].text = 'Inactive';
+                    modified = true;
+                    console.log(`Trigger inativada: ${relativePath}`);
+                }
             }
-            if (ruleElem.elements[0].text === 'true') {
-                originalStates[relativePath] = { type: 'ValidationRule', originalValue: 'true' };
-                ruleElem.elements[0].text = 'false';
-                modified = true;
-                console.log(`Validation rule desativada: ${relativePath}`);
+
+            // Objects: processa actionOverrides e compactLayoutAssignment
+            if (relativePath.includes(path.join('objects', '')) && file.endsWith('.object-meta.xml')) {
+                modified = processActionOverrides(xmlObj) || modified;
+                const compactElem = findElement(xmlObj, 'compactLayoutAssignment');
+                if (compactElem) {
+                    compactElem.elements[0].text = 'SYSTEM';
+                    modified = true;
+                }
+                if (modified) console.log(`Object ajustado: ${relativePath}`);
             }
-        }
 
-
-
-        // Flows: remover <areMetricsLoggedToDataCloud>
-        if (relativePath.includes(path.join('flows', ''))) {
-            modified = removeElements(xmlObj, 'areMetricsLoggedToDataCloud') || modified;
-            if (modified) console.log(`Elementos <areMetricsLoggedToDataCloud> removidos: ${relativePath}`);
-        }
-
-        // queueRoutingConfigs: remover <capacityType>
-        if (relativePath.includes(path.join('queueRoutingConfigs', ''))) {
-            modified = removeElements(xmlObj, 'capacityType') || modified;
-            if (modified) console.log(`Elementos <areMetricsLoggedToDataCloud> removidos: ${relativePath}`);
-        }
-
-        // Flow Definitions: remove <activeVersionNumber>
-        if (relativePath.includes(path.join('flowDefinitions', ''))) {
-            const activeVersionElem = findElement(xmlObj, 'activeVersionNumber');
-            if (!activeVersionElem) {
-                continue; // já está inativado
+            // Queues: remove <queueMembers>
+            if (relativePath.includes(path.join('queues', ''))) {
+                modified = removeElements(xmlObj, 'queueMembers') || modified;
+                if (modified) console.log(`QueueMembers removido: ${relativePath}`);
             }
-            originalStates[relativePath] = { type: 'FlowDefinition', originalValue: activeVersionElem.elements[0].text };
-            removeElement(xmlObj, 'activeVersionNumber');
-            modified = true;
-            console.log(`FlowDefinition desativada: ${relativePath}`);
-        }
 
-        // Triggers: muda de Active para Inactive
-        if (relativePath.includes(path.join('triggers', ''))) {
-            const statusElem = findElement(xmlObj, 'status');
-            if (!statusElem) {
-                console.error(`Elemento <status> ausente: ${relativePath}`);
-                process.exit(1);
-            }
-            if (statusElem.elements[0].text === 'Active') {
-                originalStates[relativePath] = { type: 'Trigger', originalValue: 'Active' };
-                statusElem.elements[0].text = 'Inactive';
-                modified = true;
-                console.log(`Trigger inativada: ${relativePath}`);
-            }
-        }
+            const finalXml = modified ? buildXml(xmlObj) : xmlContent;
 
-        // Objects: processa actionOverrides e compactLayoutAssignment
-        if (relativePath.includes(path.join('objects', '')) && file.endsWith('.object-meta.xml')) {
-            modified = processActionOverrides(xmlObj) || modified;
-            const compactElem = findElement(xmlObj, 'compactLayoutAssignment');
-            if (compactElem) {
-                compactElem.elements[0].text = 'SYSTEM';
-                modified = true;
-            }
-            if (modified) console.log(`Object ajustado: ${relativePath}`);
-        }
+            const dirPath = path.dirname(destSanitizedPath);
+            dirCreatedSet.has(dirPath) === false && await fs.ensureDir(path.dirname(destSanitizedPath));
+            dirCreatedSet.add(dirPath);
+            fs.writeFileSync(destSanitizedPath, finalXml, 'utf8');
 
-        // Queues: remove <queueMembers>
-        if (relativePath.includes(path.join('queues', ''))) {
-            modified = removeElements(xmlObj, 'queueMembers') || modified;
-            if (modified) console.log(`QueueMembers removido: ${relativePath}`);
-        }
-
-        const finalXml = modified ? buildXml(xmlObj) : xmlContent;
-        await fs.ensureDir(path.dirname(destSanitizedPath));
-        fs.writeFileSync(destSanitizedPath, finalXml, 'utf8');
+        });
     }
 
+    await concurrencyManager.waitForAll();
     await saveOriginalStates();
 };
 
@@ -612,12 +641,12 @@ const main = async () => {
         process.exit(1);
     }
     const EXCEPTION_PATH_FILE = path.join(process.cwd(), 'exceptionPath.json');
-    const exceptions = loadExceptionPaths(EXCEPTION_PATH_FILE);
+    const exceptionMap = loadExceptionPaths(EXCEPTION_PATH_FILE);
     try {
         ensureSfdxProjectJson();
         await wipeDirectories();
-        await identifyNewMetadata({ sourcePath, targetPath, debug, exceptions });
-        await sanitizeMetadata();
+        await identifyNewMetadata({ sourcePath, targetPath, debug, exceptionMap });
+        await sanitizeMetadata(exceptionMap);
         await generateDeployPackages();
         console.log('Pacotes para deploy gerados com sucesso.');
         console.log('Versão 2025-09-05 10:08');

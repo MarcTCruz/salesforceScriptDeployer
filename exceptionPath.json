@@ -44,6 +44,10 @@
             "ContasContendoCNPJDeLeadsController.cls-meta.xml",
             "ContasContendoCNPJDeLeadsTest.cls-meta.xml",
             "ConversaoLeadControllerTest.cls-meta.xml"            
+        ],
+        "includeTests":[
+            "CreateQuoteFullControllerTest.cls", 
+            "DataFactory.cls"
         ]
     }
 }
