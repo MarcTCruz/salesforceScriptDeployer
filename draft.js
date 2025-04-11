@@ -541,7 +541,7 @@ const generateDeployPackages = async () => {
         });
 
     }
-    concurrencyManager.waitForAll();
+    await concurrencyManager.waitForAll();
 };
 // Function to generate deployment commands
 const generateDeployCommands = async () => {
@@ -681,12 +681,12 @@ const main = async () => {
         await sanitizeMetadata(exceptionMap);
         await generateDeployPackages();
         const { processApexFiles } = require('./listTests');
-        const package3Dir = path.join(PACKAGES_DIR, 'package3', 'force-app', 'main', 'default', 'classes');
+        const package3Dir = path.join(PACKAGES_DIR, 'package3', 'force-app', 'main', 'default',  'classes');
         const outputFile = path.join(process.cwd(), 'specifiedTests.txt');
         processApexFiles(package3Dir, outputFile);
         await generateDeployCommands();
         console.log('Pacotes para deploy gerados com sucesso.');
-        console.log('Versão 2025-09-05 15:12');
+        console.log('Versão 2025-04-11 08:17');
     } catch (err) {
         console.error('Erro no processo:', err);
         process.exit(1);
