@@ -40,7 +40,17 @@ const areFilesDifferent = (fileA, fileB) => {
     const contentB = fs.readFileSync(fileB, 'utf8').replace(/^\s+|\s+$/gm, '');
     return contentA !== contentB;
 };
+const lockedFiles = new Set();
+const getFileLock = async (...filePath) => {
+    while (filePath.some(file => lockedFiles.has(file))) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+    }
 
+    for (const file of filePath) {
+        lockedFiles.add(file);
+    }
+}
+const releaseFileLock = (...filePath) => filePath.forEach(file => lockedFiles.delete(file));
 const CREATED_FILES_SET = new Set();
 const CREATED_DIRS_SET = new Set();
 const fileCounterPath = (filePath) => filePath.endsWith('-meta.xml') ? filePath.replace('-meta.xml', '') : filePath + '-meta.xml';
@@ -59,7 +69,9 @@ const copyFileWithStructure = async (filePath, sourceBase, destBase) => {
 
     if (!CREATED_FILES_SET.has(destPath) && !CREATED_FILES_SET.has(destCounterPath)) {
         CREATED_FILES_SET.add(destPath);
+        await getFileLock(destPath, destCounterPath);
         await Promise.all([fs.copy(filePath, destPath), fs.copy(fileCounterPart, destCounterPath).catch(() => { })]);
+        releaseFileLock(destPath, destCounterPath);
     }
 };
 
@@ -325,7 +337,6 @@ const sanitizeMetadata = async (exceptionMap) => {
 
             const pathDir = path.dirname(relativePath);
             if (!file.endsWith('-meta.xml')) {
-
                 await copyFileWithStructure(file, NEWS_DIR, SANITIZED_DIR);
                 // For non-XML files, process as usual:
                 if (pathDir === 'classes') {
@@ -452,7 +463,9 @@ const sanitizeMetadata = async (exceptionMap) => {
             const dirPath = path.dirname(destSanitizedPath);
             dirCreatedSet.has(dirPath) === false && await fs.ensureDir(path.dirname(destSanitizedPath));
             dirCreatedSet.add(dirPath);
+            await getFileLock(destSanitizedPath);
             fs.writeFileSync(destSanitizedPath, finalXml, 'utf8');
+            releaseFileLock(destSanitizedPath);
 
         });
     }
