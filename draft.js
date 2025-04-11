@@ -485,7 +485,7 @@ const generateDeployPackages = async () => {
             components: ['labels', 'standardValueSets', 'groups', 'objects', 'customMetadata', 'queues', 'queueRoutingConfigs', 'remoteSiteSettings']
         },
         package2: {
-            components: ['globalValueSets']
+            components: ['globalValueSets', 'staticresources']
         },
         package3: {
             components: ['tabs', 'classes', 'triggers', 'pages', 'lwc', 'aura']
@@ -500,7 +500,7 @@ const generateDeployPackages = async () => {
             components: []
         },
         package7: {
-            components: ['staticresources']
+            components: []
         },
         package8: {
             components: ['quickActions', 'layouts', 'flexiPages']
