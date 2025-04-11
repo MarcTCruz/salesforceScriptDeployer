@@ -41,6 +41,7 @@ const areFilesDifferent = (fileA, fileB) => {
     return contentA !== contentB;
 };
 
+const CREATED_FILES_SET = new Set();
 const CREATED_DIRS_SET = new Set();
 const fileCounterPath = (filePath) => filePath.endsWith('-meta.xml') ? filePath.replace('-meta.xml', '') : filePath + '-meta.xml';
 const copyFileWithStructure = async (filePath, sourceBase, destBase) => {
@@ -56,7 +57,10 @@ const copyFileWithStructure = async (filePath, sourceBase, destBase) => {
         await fs.ensureDir(dirname);
     }
 
-    await Promise.all([fs.copy(filePath, destPath), fs.copy(fileCounterPart, destCounterPath).catch(() => { })]);
+    if (!CREATED_FILES_SET.has(destPath) && !CREATED_FILES_SET.has(destCounterPath)) {
+        CREATED_FILES_SET.add(destPath);
+        await Promise.all([fs.copy(filePath, destPath), fs.copy(fileCounterPart, destCounterPath).catch(() => { })]);
+    }
 };
 
 const parseXml = xmlStr =>
@@ -209,16 +213,16 @@ const loadExceptionPaths = (exceptionPathFile) => {
 };
 
 const isPathException = (relativePath, exceptions) => {
-    const normalizeWithoutFirstPath = (path) => path.split(/[\\/]/).slice(1).join('/');
-    const normalizePath = (path) => path.split(/[\\/]/).join('/');
+    const pathDirs = path.dirname(relativePath).split(path.sep);
+    relativePath = relativePath.split(path.sep).join(path.posix.sep);
 
     for (const pattern of exceptions) {
         if (pattern instanceof RegExp && pattern.test(relativePath)) {
             return true;
         }
         if (typeof pattern === 'string') {
-            const normalizedPath = normalizeWithoutFirstPath(relativePath);
-            const normalizedPattern = normalizePath(pattern);
+            const normalizedPath = pathDirs.slice(1).join(path.sep);
+            const normalizedPattern = path.normalize(pattern);
             if (normalizedPath === normalizedPattern) {
                 return true;
             }
@@ -240,67 +244,62 @@ const identifyNewMetadata = async ({ sourcePath, targetPath, debug, exceptionMap
     const concurrencyManager = new ConcurrencyManager(os.cpus().length);
 
     for (const sourceFile of sourceFiles) {
-        const relativePath = path.relative(sourcePath, sourceFile);
-        const exceptionKey = path.dirname(relativePath).split(path.sep).pop();
-        if (exceptionKey in exceptionMap && isPathException(relativePath, exceptionMap[exceptionKey].ignoredPaths ?? [])) {
-            console.log(`Ignorado conforme exceptionPath.json: ${relativePath}`);
-            continue;
-        }
-
-        if (relativePath.includes(path.join('standardValueSets', '')) && sourceFile.endsWith('.xml')) {
-            const xmlContent = fs.readFileSync(sourceFile, 'utf8');
-            if (!xmlContent.includes('<standardValue>')) {
-                console.log(`Ignorando arquivo com <standardValue>: ${relativePath}`);
-                continue;
+        concurrencyManager.run(async () => {
+            const relativePath = path.relative(sourcePath, sourceFile);
+            const paths = path.dirname(relativePath).split(path.sep);
+            const exceptionKey = paths[0];
+            if (exceptionKey in exceptionMap && isPathException(relativePath, exceptionMap[exceptionKey].ignoredPaths ?? [])) {
+                console.log(`Ignorado conforme exceptionPath.json: ${relativePath}`);
+                return;
             }
-        }
 
-        if (relativePath.includes(path.join('objects', '')) && relativePath.includes(path.join('listViews', '')) && sourceFile.endsWith('-meta.xml')) {
-            const xmlContent = fs.readFileSync(sourceFile, 'utf8');
-            if (xmlContent.includes('<filterScope>Mine</filterScope>')) {
-                console.log(`Ignorando arquivo com <filterScope>Mine</filterScope>: ${relativePath}`);
-                continue;
+            if (exceptionKey.includes('standardValueSets') && sourceFile.endsWith('.xml')) {
+                const xmlContent = fs.readFileSync(sourceFile, 'utf8');
+                if (!xmlContent.includes('<standardValue>')) {
+                    console.log(`Ignorando arquivo sem <standardValue>: ${relativePath}`);
+                    return;
+                }
             }
-        }
 
-        const targetFile = path.join(targetPath, relativePath);
-        const sourceFileCounterPath = fileCounterPath(sourceFile);
+            if (exceptionKey.includes('objects') && 3 === path.length && path[2].includes('listViews') && sourceFile.endsWith('-meta.xml')) {
+                const xmlContent = fs.readFileSync(sourceFile, 'utf8');
+                if (xmlContent.includes('<filterScope>Mine</filterScope>')) {
+                    console.log(`Ignorando arquivo com <filterScope>Mine</filterScope>: ${relativePath}`);
+                    return;
+                }
+            }
 
-        if (copiedFiles.has(targetFile)) {
-            continue;
-        }
-        copiedFiles.add(sourceFileCounterPath);
-        if (!fs.existsSync(targetFile)) {
-            const copyTask = async () => {
+            const targetFile = path.join(targetPath, relativePath);
+            const sourceFileCounterPath = fileCounterPath(sourceFile);
+
+            if (copiedFiles.has(targetFile)) {
+                return;
+            }
+            copiedFiles.add(sourceFileCounterPath);
+            if (!fs.existsSync(targetFile)) {
                 await copyFileWithStructure(sourceFile, sourcePath, NEWS_DIR);
                 debug && console.log(`Novo: ${relativePath}`);
-            };
-            concurrencyManager.run(copyTask);
-        } else if (areFilesDifferent(sourceFile, targetFile)) {
-            const copyTask = async () => {
+            } else if (areFilesDifferent(sourceFile, targetFile)) {
                 await copyFileWithStructure(sourceFile, sourcePath, NEWS_DIR);
                 debug && console.log(`Alterado: ${relativePath}`);
-            };
-            concurrencyManager.run(copyTask);
-        } else {
-            continue;
-        }
-
-        if (isObjectRegex.test(relativePath)) {
-            const objectName = relativePath.match(isObjectRegex)[1];
-            if (copiedObjects.has(objectName)) {
-                continue;
+            } else {
+                return;
             }
 
-            const objectFile = path.join(sourcePath, 'force-app', 'main', 'default', 'objects', objectName, `${objectName}.object-meta.xml`);
-            const objectRelative = path.relative(sourcePath, objectFile);
-            copiedObjects.add(objectName);
-            if (!fs.existsSync(path.join(NEWS_DIR, objectRelative))) {
-                concurrencyManager.run(async () => {
+            if (isObjectRegex.test(relativePath)) {
+                const objectName = relativePath.match(isObjectRegex)[1];
+                if (copiedObjects.has(objectName)) {
+                    return;
+                }
+
+                const objectFile = path.join(sourcePath, 'force-app', 'main', 'default', 'objects', objectName, `${objectName}.object-meta.xml`);
+                const objectRelative = path.relative(sourcePath, objectFile);
+                copiedObjects.add(objectName);
+                if (!fs.existsSync(path.join(NEWS_DIR, objectRelative))) {
                     await copyFileWithStructure(objectFile, sourcePath, NEWS_DIR);
-                });
+                }
             }
-        }
+        });
     }
 
     await concurrencyManager.waitForAll();
@@ -399,8 +398,6 @@ const sanitizeMetadata = async (exceptionMap) => {
                 }
             }
 
-
-
             // Flows: remover <areMetricsLoggedToDataCloud>
             if (relativePath.includes(path.join('flows', ''))) {
                 modified = removeElements(xmlObj, 'areMetricsLoggedToDataCloud') || modified;
@@ -474,74 +471,97 @@ const sanitizeMetadata = async (exceptionMap) => {
 // -------------------------------------------------------
 // Fase 3: Gerar Pacotes de Deploy
 // -------------------------------------------------------
+const PACKAGES = {
+    package0: {
+        components: ['permissionsets', 'customPermissions']
+    },
+    package1: {
+        components: ['labels', 'standardValueSets', 'groups', 'objects', 'customMetadata', 'queues', 'queueRoutingConfigs', 'remoteSiteSettings']
+    },
+    package2: {
+        components: ['globalValueSets', 'staticresources']
+    },
+    package3: {
+        components: ['tabs', 'classes', 'triggers', 'pages', 'lwc', 'aura']
+    },
+    package4: {
+        components: ['flows', 'flowDefinitions', 'Email', 'labels']
+    },
+    package5: {
+        components: ['SharingRules', 'workflows', 'assignmentRules', 'approvalProcesses']
+    },
+    package6: {
+        components: []
+    },
+    package7: {
+        components: []
+    },
+    package8: {
+        components: ['quickActions', 'layouts', 'flexiPages']
+    },
+    package9: {
+        components: ['applications']
+    },
+    package10: {
+        baseSource: NEWS_DIR,
+        components: ['objects']
+    },
+    package11: {
+        baseSource: NEWS_DIR,
+        components: ['profiles', 'permissionsets', 'customPermissions', 'permissionsetgroups']
+    },
+    package12: {
+        components: ['Roles']
+    },
+    package13: {
+        components: []//objectTranslations
+    }
+};
 const generateDeployPackages = async () => {
     console.log('Fase 3: Gerando pacotes de deploy...');
     // Define your packages along with an optional baseSource per package.
-    const packages = {
-        package0: {
-            components: ['permissionsets', 'customPermissions']
-        },
-        package1: {
-            components: ['labels', 'standardValueSets', 'groups', 'objects', 'customMetadata', 'queues', 'queueRoutingConfigs', 'remoteSiteSettings']
-        },
-        package2: {
-            components: ['globalValueSets', 'staticresources']
-        },
-        package3: {
-            components: ['tabs', 'classes', 'triggers', 'pages', 'lwc', 'aura']
-        },
-        package4: {
-            components: ['flows', 'flowDefinitions', 'Email', 'labels']
-        },
-        package5: {
-            components: ['SharingRules', 'workflows', 'assignmentRules', 'approvalProcesses']
-        },
-        package6: {
-            components: []
-        },
-        package7: {
-            components: []
-        },
-        package8: {
-            components: ['quickActions', 'layouts', 'flexiPages']
-        },
-        package9: {
-            components: ['applications']
-        },
-        package10: {
-            baseSource: NEWS_DIR,
-            components: ['objects']
-        },
-        package11: {
-            baseSource: NEWS_DIR,
-            components: ['profiles', 'permissionsets', 'customPermissions', 'permissionsetgroups']
-        },
-        package12: {
-            components: ['Roles']
-        },
-        package13: {
-            components: []//objectTranslations
-        }
-    };
 
+    const concurrencyManager = new ConcurrencyManager(os.cpus().length);
     // Process each package using the defined baseSource (default to SANITIZED_DIR)
-    for (const [pkgName, { components, baseSource = SANITIZED_DIR }] of Object.entries(packages)) {
-        const pkgDir = path.join(PACKAGES_DIR, pkgName, 'force-app', 'main', 'default');
-        await fs.ensureDir(pkgDir);
-        console.log(`Criando pacote ${pkgName} com [${components.join(', ')}] usando base "${baseSource === NEWS_DIR ? 'NEWS_DIR' : 'SANITIZED_DIR'}"`);
+    for (const [pkgName, { components, baseSource = SANITIZED_DIR }] of Object.entries(PACKAGES)) {
+        concurrencyManager.run(async () => {
+            const pkgDir = path.join(PACKAGES_DIR, pkgName, 'force-app', 'main', 'default');
+            await fs.ensureDir(pkgDir);
+            console.log(`Criando pacote ${pkgName} com [${components.join(', ')}] usando base "${baseSource === NEWS_DIR ? 'NEWS_DIR' : 'SANITIZED_DIR'}"`);
 
-        // For each component, copy its folder structure from the specified baseSource
-        for (const comp of components) {
-            const compSourceDir = path.join(baseSource, comp);
-            if (!fs.existsSync(compSourceDir)) {
-                continue;
+            // For each component, copy its folder structure from the specified baseSource
+            for (const comp of components) {
+                const compSourceDir = path.join(baseSource, comp);
+                if (!fs.existsSync(compSourceDir)) {
+                    continue;
+                }
+                const destDir = path.join(pkgDir, comp);
+                await fs.copy(compSourceDir, destDir);
             }
-            const destDir = path.join(pkgDir, comp);
-            await fs.copy(compSourceDir, destDir);
-        }
-    }
-};
+        });
 
+    }
+    concurrencyManager.waitForAll();
+};
+// Function to generate deployment commands
+const generateDeployCommands = async () => {
+    const specifiedTestsPath = path.join(process.cwd(), 'specifiedTests.txt');
+    const specifiedTests = fs.existsSync(specifiedTestsPath) ? fs.readFileSync(specifiedTestsPath, 'utf8') : '';
+    const deployCommandsPath = path.join(process.cwd(), 'deployCommands.txt');
+
+    const commands = Object.entries(PACKAGES).map(([pkgName, { components }], index) => {
+        if (components.length === 0) return '';
+
+        const packageDir = path.relative(process.cwd(), path.join(DEPLOY_STAGING, 'packages', pkgName)).split(path.sep).join(path.posix.sep);
+        const testOption = pkgName === 'package3' ? specifiedTests : '-t "Dummy"';
+        const command = `sf project deploy validate --source-dir ./${packageDir} --source-dir ./DummyTest.cls -l RunSpecifiedTests ${testOption} --target-org`;
+
+        return `---------------- PACKAGE${index} ----------------\n${command}\n---------------- PACKAGE${index} ----------------`;
+    }).filter(Boolean).join('\n\n');
+
+    fs.writeFileSync(deployCommandsPath, commands, 'utf8');
+    console.log('Deployment commands written to deployCommands.txt');
+};
 // -------------------------------------------------------
 // Fase 4: Deploy
 // -------------------------------------------------------
@@ -660,6 +680,11 @@ const main = async () => {
         await identifyNewMetadata({ sourcePath, targetPath, debug, exceptionMap });
         await sanitizeMetadata(exceptionMap);
         await generateDeployPackages();
+        const { processApexFiles } = require('./listTests');
+        const package3Dir = path.join(PACKAGES_DIR, 'package3', 'force-app', 'main', 'default', 'classes');
+        const outputFile = path.join(process.cwd(), 'specifiedTests.txt');
+        processApexFiles(package3Dir, outputFile);
+        await generateDeployCommands();
         console.log('Pacotes para deploy gerados com sucesso.');
         console.log('Versão 2025-09-05 15:12');
     } catch (err) {

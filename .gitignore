@@ -4,3 +4,5 @@
 !exceptionPath.json
 !apexClassCoverageHack.js
 !listTests.js
+!DummyTest.cls
+!DummyTest.cls-meta.xml

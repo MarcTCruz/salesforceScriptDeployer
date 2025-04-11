@@ -1,4 +1,9 @@
 {
+    ".sfdx": {
+        "ignoredPaths": [
+            "/.*/"
+        ]
+    },
     "triggers": {
         "ignoredPaths": [
             "AtualizarCamposStatus.trigger",
@@ -53,10 +58,10 @@
             "CompartilharContaObjetosFilhosTest.cls-meta.xml",
             "ContasContendoCNPJDeLeadsController.cls-meta.xml",
             "ContasContendoCNPJDeLeadsTest.cls-meta.xml",
-            "ConversaoLeadControllerTest.cls-meta.xml"            
+            "ConversaoLeadControllerTest.cls-meta.xml"
         ],
-        "includeTests":[
-            "CreateQuoteFullControllerTest.cls", 
+        "includeTests": [
+            "CreateQuoteFullControllerTest.cls",
             "DataFactory.cls",
             "ObjectUtilityForTesting.cls",
             "AllTriggersTest.cls"

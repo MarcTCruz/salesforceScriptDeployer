@@ -10,19 +10,18 @@ function processApexFiles(directory, outputFile) {
       const filePath = path.join(directory, file);
       let content = fs.readFileSync(filePath, 'utf8');
 
-      // Remove single-line and multi-line comments
       content = content.replace(/\/\/.*|\/\*[\s\S]*?\*\//g, '');
 
-      // Check for @IsTest annotation
       if (/@isTest/i.test(content)) {
-        testClasses.push(file.substring(0, file.length - 4)); // Remove the .cls extension
+        testClasses.push(file.substring(0, file.length - 4));
       }
     }
   });
 
-  // Write the list of test classes to the output file
-  fs.writeFileSync(outputFile, '--tests "' + testClasses.join('" "') + '"', 'utf8');
+  fs.writeFileSync(outputFile, '-t "' + testClasses.join('" "') + '"', 'utf8');
 }
 
+module.exports = { processApexFiles };
+
 // Example usage
-processApexFiles('./deploy-staging/packages/package3/force-app/main/default/classes', './specifiedTests.txt');
+//processApexFiles('./deploy-staging/packages/package3/force-app/main/default/classes', './specifiedTests.txt');
