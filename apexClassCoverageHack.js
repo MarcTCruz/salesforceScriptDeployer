@@ -130,7 +130,11 @@ async function injectHack(filePath) {
     // Calculate how many lines the method should have, according to the rule:
     // We want the method to have 80% of the final total. Since the original class has numLines,
     // and we want X/(X + numLines) = 0.8, resulting in X = 4 * numLines.
-    const methodLinesTotal = numLines * 4;
+    let methodLinesTotal = numLines * 4;
+
+    if((methodLinesTotal + numLines) > 4000){
+        methodLinesTotal = 4000 - numLines;
+    }
 
     // Constructing the method body:
     // The first line is "Integer a = 0;" and the rest (methodLinesTotal - 1) will be "a++;"

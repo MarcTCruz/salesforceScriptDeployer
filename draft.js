@@ -215,13 +215,14 @@ const loadExceptionPaths = (exceptionPathFile) => {
 const isPathException = (relativePath, exceptions) => {
     const matchingPath = relativePath.split(path.sep).slice(1).join(path.sep);
 
+    const pathDir = path.dirname(relativePath);
     for (const pattern of exceptions) {
         if (pattern instanceof RegExp && pattern.test(relativePath)) {
             return true;
         }
         if (typeof pattern === 'string') {
             const normalizedPattern = path.normalize(pattern);
-            if (matchingPath === normalizedPattern) {
+            if (matchingPath.toLowerCase() === normalizedPattern.toLowerCase()) {
                 return true;
             }
         }

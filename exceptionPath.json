@@ -30,8 +30,8 @@
     },
     "classes": {
         "ignoredPaths": [
-            "EinsteinBot_EmployeeBasicinfo.cls",
-            "EinsteinBot_EmployeeBasicinfo.cls-meta.xml",
+            "EinsteinBot_EmployeeBasicInfo.cls",
+            "EinsteinBot_EmployeeBasicInfo.cls-meta.xml",
             "EinsteinBot_EmployeeBasicinfoTest.cls",
             "EinsteinBot_EmployeeBasicinfoTest.cls-meta.xml",
             "EinsteinBot_SendSmsTest.cls",
@@ -64,7 +64,8 @@
             "CreateQuoteFullControllerTest.cls",
             "DataFactory.cls",
             "ObjectUtilityForTesting.cls",
-            "AllTriggersTest.cls"
+            "AllTriggersTest.cls",
+            "SkipTriggerTestHelper.cls"
         ]
     }
 }
