@@ -132,8 +132,8 @@ async function injectHack(filePath) {
     // and we want X/(X + numLines) = 0.8, resulting in X = 4 * numLines.
     let methodLinesTotal = numLines * 4;
 
-    if((methodLinesTotal + numLines) > 4000){
-        methodLinesTotal = 4000 - numLines;
+    if((methodLinesTotal + numLines) > 4100){
+        methodLinesTotal = 4100 - numLines;
     }
 
     // Constructing the method body:

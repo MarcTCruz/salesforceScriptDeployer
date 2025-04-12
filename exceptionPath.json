@@ -65,7 +65,8 @@
             "DataFactory.cls",
             "ObjectUtilityForTesting.cls",
             "AllTriggersTest.cls",
-            "SkipTriggerTestHelper.cls"
+            "SkipTriggerTestHelper.cls",
+            "BrazilianDocumentGeneratorForTest.cls"
         ]
     }
 }
