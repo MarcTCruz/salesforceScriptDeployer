@@ -513,11 +513,11 @@ const PACKAGES = {
         components: []
     },
     package9: {
-        components: []
+        baseSource: NEWS_DIR,
+        components: ['objects', 'quickActions', 'layouts', 'flexiPages']
     },
     package10: {
-        baseSource: NEWS_DIR,
-        components: ['objects', 'applications', 'quickActions', 'layouts', 'flexiPages']
+        components: ['applications']
     },
     package11: {
         baseSource: NEWS_DIR,
@@ -713,3 +713,6 @@ main();
 //await identifyNewMetadata(sourcePath, targetPath);
 //await sanitizeMetadata();
 //await generateDeployPackages();
+//to-do
+//must fix removal of resumeBilling and SuspendBilling of objects on news copy
+//must remove Mine listviews on news copy
