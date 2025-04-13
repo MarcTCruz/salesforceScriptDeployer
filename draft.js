@@ -498,7 +498,7 @@ const PACKAGES = {
         components: ['tabs', 'classes', 'triggers', 'pages', 'lwc', 'aura']
     },
     package4: {
-        components: ['flows', 'flowDefinitions', 'Email', 'labels', 'SharingRules', 'workflows', 'assignmentRules', 'approvalProcesses']//alguns flows usam email alerts que ficam dentro de workflows
+        components: ['flows', 'flowDefinitions', /*'Email', 'letterhead', feito deploy direto da pasta hml, " Unable to calculate fullName from component at path: (EmailTemplate)"*/ 'labels', 'SharingRules', 'workflows', /*'assignmentRules,' só tem lead e case, sem alteração no CRM*/ 'approvalProcesses']//alguns flows usam email alerts que ficam dentro de workflows
     },
     package5: {
         components: []
@@ -524,7 +524,7 @@ const PACKAGES = {
         components: ['profiles', 'permissionsets', 'customPermissions', 'permissionsetgroups']
     },
     package12: {
-        components: ['Roles']
+        components: ['Roles']//roles são necessários para sharingRules, subir antes deles
     },
     package13: {
         components: []//objectTranslations

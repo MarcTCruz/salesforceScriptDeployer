@@ -75,12 +75,26 @@
     },
     "flowDefinitions": {
         "ignoredPaths": [
-            "TESTE_118_DMND35511_Chatbot_de_Gente_Regra_de_seguran_a.flow-meta.xml"
+            "TESTE_118_DMND35511_Chatbot_de_Gente_Regra_de_seguran_a.flowDefinition-meta.xml",
+            "Linhas_da_OT_Atividade_conclioda_n_o_permite_altera_o.flowDefinition-meta.xml",
+            "Linhas_da_OT_Canela_ativifades_de_Ordem_de_Trabalho_Cancelada.flowDefinition-meta.xml"
         ]
     },
-    "flow": {
+    "flows": {
         "ignoredPaths": [
-            "TESTE_118_DMND35511_Chatbot_de_Gente_Regra_de_seguran_a.flow-meta.xml"
+            "TESTE_118_DMND35511_Chatbot_de_Gente_Regra_de_seguran_a.flow-meta.xml",
+            "Linhas_da_OT_Atividade_conclioda_n_o_permite_altera_o.flow-meta.xml",
+            "Linhas_da_OT_Canela_ativifades_de_Ordem_de_Trabalho_Cancelada.flow-meta.xml"
+        ]
+    },
+    "workflows": {
+        "ignoredPaths": [
+            "Lead.workflow-meta.xml"
+        ]
+    },
+    "assignmentRules": {
+        "ignoredPaths": [
+            "/.*/"
         ]
     }
 }
