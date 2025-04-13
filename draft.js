@@ -510,14 +510,14 @@ const PACKAGES = {
         components: []
     },
     package8: {
-        components: ['quickActions', 'layouts', 'flexiPages']
+        components: []
     },
     package9: {
         components: []
     },
     package10: {
         baseSource: NEWS_DIR,
-        components: ['objects', 'applications']
+        components: ['objects', 'applications', 'quickActions', 'layouts', 'flexiPages']
     },
     package11: {
         baseSource: NEWS_DIR,
