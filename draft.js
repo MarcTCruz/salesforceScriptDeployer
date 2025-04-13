@@ -412,7 +412,7 @@ const sanitizeMetadata = async (exceptionMap) => {
             }
 
             // Triggers: muda de Active para Inactive
-            if (pathDirs[0] === 'triggers') {
+            /*if (pathDirs[0] === 'triggers') {
                 const statusElem = findElement(xmlObj, 'status');
                 if (!statusElem) {
                     console.error(`Elemento <status> ausente: ${relativePath}`);
@@ -425,6 +425,7 @@ const sanitizeMetadata = async (exceptionMap) => {
                     console.log(`Trigger inativada: ${relativePath}`);
                 }
             }
+                QUando sobe Inact, Salesforce é incapaz de testart a trigger, logo falha.*/
 
             // Validation Rules: desativa se <active> estiver true
             if (pathDirs[0] === 'objects' && relativePath.includes(path.join('validationRules', ''))) {

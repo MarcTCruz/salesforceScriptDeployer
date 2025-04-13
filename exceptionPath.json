@@ -11,7 +11,11 @@
             "ContentDistributionTrigger.trigger",
             "ContentDistributionTrigger.trigger-meta.xml",
             "conversaoProdutoTrigger.trigger",
-            "conversaoProdutoTrigger.trigger-meta.xml"
+            "conversaoProdutoTrigger.trigger-meta.xml",
+            "PlanoAcaoTrigger.trigger",
+            "PlanoAcaoTrigger.trigger-meta.xml",
+            "Participante.trigger",
+            "Participante.trigger-meta.xml"
         ]
     },
     "permissionsets": {
@@ -61,12 +65,10 @@
             "ConversaoLeadControllerTest.cls-meta.xml"
         ],
         "includeTests": [
-            "CreateQuoteFullControllerTest.cls",
             "DataFactory.cls",
             "ObjectUtilityForTesting.cls",
             "AllTriggersTest.cls",
-            "SkipTriggerTestHelper.cls",
-            "BrazilianDocumentGeneratorForTest.cls"
+            "SkipTriggerTestHelper.cls"
         ]
     }
 }
