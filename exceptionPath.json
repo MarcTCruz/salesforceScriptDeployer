@@ -15,7 +15,9 @@
             "PlanoAcaoTrigger.trigger",
             "PlanoAcaoTrigger.trigger-meta.xml",
             "Participante.trigger",
-            "Participante.trigger-meta.xml"
+            "Participante.trigger-meta.xml",
+            "SolicitacaoPricingTrigger.trigger",
+            "SolicitacaoPricingTrigger.trigger-meta.xml"
         ]
     },
     "permissionsets": {
