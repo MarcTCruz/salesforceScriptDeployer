@@ -72,5 +72,15 @@
             "AllTriggersTest.cls",
             "SkipTriggerTestHelper.cls"
         ]
+    },
+    "flowDefinitions": {
+        "ignoredPaths": [
+            "TESTE_118_DMND35511_Chatbot_de_Gente_Regra_de_seguran_a.flow-meta.xml"
+        ]
+    },
+    "flow": {
+        "ignoredPaths": [
+            "TESTE_118_DMND35511_Chatbot_de_Gente_Regra_de_seguran_a.flow-meta.xml"
+        ]
     }
 }

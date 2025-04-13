@@ -391,6 +391,12 @@ const sanitizeMetadata = async (exceptionMap) => {
             if (pathDirs[0] === 'flows') {
                 modified = removeElements(xmlObj, 'areMetricsLoggedToDataCloud') || modified;
                 if (modified) console.log(`Elementos <areMetricsLoggedToDataCloud> removidos: ${relativePath}`);
+
+                modified = removeElements(xmlObj, 'offset') || modified;
+                if (modified) console.log(`Elementos <areMetricsLoggedToDataCloud> removidos: ${relativePath}`);
+
+                modified = removeElements(xmlObj, 'customErrors') || modified;
+                if (modified) console.log(`Elementos <areMetricsLoggedToDataCloud> removidos: ${relativePath}`);
             }
 
             // queueRoutingConfigs: remover <capacityType>
@@ -492,10 +498,10 @@ const PACKAGES = {
         components: ['tabs', 'classes', 'triggers', 'pages', 'lwc', 'aura']
     },
     package4: {
-        components: ['flows', 'flowDefinitions', 'Email', 'labels']
+        components: ['flows', 'flowDefinitions', 'Email', 'labels', 'SharingRules', 'workflows', 'assignmentRules', 'approvalProcesses']//alguns flows usam email alerts que ficam dentro de workflows
     },
     package5: {
-        components: ['SharingRules', 'workflows', 'assignmentRules', 'approvalProcesses']
+        components: []
     },
     package6: {
         components: []
