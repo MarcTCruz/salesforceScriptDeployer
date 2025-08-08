@@ -712,7 +712,7 @@ const main = async () => {
 
 main();
 
-//script usage: node deploy-metadata.js --sourcePath=/path/to/hml/force-app/main/default --targetPath=./path/to/miniprod/force-app/main/default
+//script usage: node draft.js --sourcePath=/path/to/hml/force-app/main/default --targetPath=./path/to/miniprod/force-app/main/default
 //deve ser testado os métodos:
 //await identifyNewMetadata(sourcePath, targetPath);
 //await sanitizeMetadata();
