@@ -7,9 +7,9 @@
  * - Estrutura concisa e fácil de ler.
  *
  * Pré-requisitos:
- *   npm install fs-extra xml-js
+ * npm install fs-extra xml-js
  */
-
+const INACTIVATE = false; // Set to true to inactivate triggers, flows, etc.
 const fs = require('fs-extra');
 const path = require('path');
 const { execSync } = require('child_process');
@@ -312,7 +312,7 @@ const identifyNewMetadata = async ({ sourcePath, targetPath, debug, exceptionMap
 // -------------------------------------------------------
 // Fase 2: Sanitização dos Metadados Novos
 // ------------------------------------------------------
-const sanitizeMetadata = async (exceptionMap) => {
+const sanitizeMetadata = async (exceptionMap, injectHackFlag = false) => {
     console.log('Fase 2: Sanitização dos metadados...');
     await fs.ensureDir(SANITIZED_DIR);
     const newsFiles = getAllFiles(NEWS_DIR);
@@ -341,7 +341,7 @@ const sanitizeMetadata = async (exceptionMap) => {
                 // For non-XML files, process as usual:
                 if (pathDir === 'classes') {
                     // Presume injectHack returns an object where isTest indicates a test class
-                    const { isTest } = await injectHack(destSanitizedPath);
+                    const { isTest } = await injectHack(destSanitizedPath, injectHackFlag);
                     const exceptionKey = path.dirname(relativePath).split(path.sep).pop().trim();
                     const mustIncludeTest = isTest && exceptionKey in exceptionMap && isPathException(relativePath, exceptionMap[exceptionKey].includeTests ?? []);
 
@@ -406,7 +406,7 @@ const sanitizeMetadata = async (exceptionMap) => {
             }
 
             // Flow Definitions: remove <activeVersionNumber>
-            if (pathDirs[0] === 'flowDefinitions') {
+            if (INACTIVATE && pathDirs[0] === 'flowDefinitions') {
                 const activeVersionElem = findElement(xmlObj, 'activeVersionNumber');
                 if (!activeVersionElem) {
                     return; // já está inativado
@@ -434,7 +434,7 @@ const sanitizeMetadata = async (exceptionMap) => {
                 QUando sobe Inact, Salesforce é incapaz de testart a trigger, logo falha.*/
 
             // Validation Rules: desativa se <active> estiver true
-            if (pathDirs[0] === 'objects' && relativePath.includes(path.join('validationRules', ''))) {
+            if (INACTIVATE && pathDirs[0] === 'objects' && relativePath.includes(path.join('validationRules', ''))) {
                 const ruleElem = findElement(xmlObj, 'active');
                 if (!ruleElem) {
                     console.error(`Elemento <active> ausente: ${relativePath}`);
@@ -575,6 +575,7 @@ const generateDeployCommands = async () => {
     fs.writeFileSync(deployCommandsPath, commands, 'utf8');
     console.log('Deployment commands written to deployCommands.txt');
 };
+
 // -------------------------------------------------------
 // Fase 4: Deploy
 // -------------------------------------------------------
@@ -596,8 +597,9 @@ const deployPackages = async () => {
     }
 };
 
+
 // -------------------------------------------------------
-// Fase 5: Pós-Deploy – Reativação
+// Pós-Deploy – Reativação
 // -------------------------------------------------------
 const postDeploy = async () => {
     console.log('Fase 5: Pós-deploy (Reativação)...');
@@ -672,16 +674,18 @@ const main = async () => {
         options: {
             sourcePath: { type: 'string', short: 's' },
             targetPath: { type: 'string', short: 't' },
-            debug: { type: 'boolean', short: 'd' }
+            debug: { type: 'boolean', short: 'd' },
+            injectHack: { type: 'boolean', short: 'i' }
         }
     });
 
     const sourcePath = args.sourcePath;
     const targetPath = args.targetPath;
     const debug = args.debug;
+    const injectHackFlag = args.injectHack;
 
     if (!sourcePath || !targetPath) {
-        console.error('Uso: node deploy-metadata.js --sourcePath=<origem> --targetPath=<destino>');
+        console.error('Uso: node deploy-metadata.js --sourcePath=<origem> --targetPath=<destino> [--debug] [--injectHack]');
         console.error('Exemplo: node deploy-metadata.js --sourcePath=/path/to/source --targetPath=/path/to/target');
         process.exit(1);
     }
@@ -691,7 +695,7 @@ const main = async () => {
         ensureSfdxProjectJson();
         await wipeDirectories();
         await identifyNewMetadata({ sourcePath, targetPath, debug, exceptionMap });
-        await sanitizeMetadata(exceptionMap);
+        await sanitizeMetadata(exceptionMap, injectHackFlag);
         await generateDeployPackages();
         const { processApexFiles } = require('./listTests');
         const package3Dir = path.join(PACKAGES_DIR, 'package3', 'force-app', 'main', 'default', 'classes');
@@ -715,4 +719,4 @@ main();
 //await generateDeployPackages();
 //to-do
 //must fix removal of resumeBilling and SuspendBilling of objects on news copy
-//must remove Mine listviews on news copy
+//must remove listviews with filterScope Mine on news copy

@@ -91,14 +91,15 @@ function removeComments(content) {
 }
 
 /**
- * Processes the Apex file:
- *  - If it is NOT a test class (@IsTest), injects the method testeXPTO with repetitions of "a++;"
- *    so that its size is 4x the number of lines of the class (i.e., 80% of the total)
- *  - Generates a test class that calls this method.
+ * Processes an Apex file. It always checks if the class is a test class.
+ * If the 'enabled' flag is true and the class is not a test, interface, or enum,
+ * it injects a method to increase code coverage and generates a corresponding test class.
  *
  * @param {string} filePath Full path to the .cls file to be processed.
+ * @param {boolean} [enabled=false] - A flag to enable or disable the injection logic.
+ * @returns {Promise<{isTest: boolean}>} An object indicating if the class is a test class.
  */
-async function injectHack(filePath) {
+async function injectHack(filePath, enabled = false) {
     // Read the original file
     let originalContent = fs.readFileSync(filePath, "utf8");
 
@@ -107,19 +108,24 @@ async function injectHack(filePath) {
 
     // Check if the content has the @IsTest annotation (case insensitive)
     if (/[@]IsTest/i.test(withoutComments)) {
-        console.log("The class is already a test (@IsTest). No injection was performed.");
+        console.log(`Class is a test class (@IsTest): ${filePath}. No injection performed.`);
         return { isTest: true };
+    }
+
+    // If injection is disabled, simply return that it's not a test class.
+    if (!enabled) {
+        return { isTest: false };
     }
 
     const isClassAnInterface = /(^|\s+)interface\s+/i.test(withoutComments.split('\n')[0]);
     if (isClassAnInterface) {
-        console.log("The class is an interface. No injection was performed.");
+        console.log(`The class is an interface. No injection was performed on: ${filePath}`);
         return { isTest: false };
     }
 
     const isClassEnum = /(^|\s+)enum\s+/i.test(withoutComments.split('\n')[0]);
     if (isClassEnum) {
-        console.log("The class is an enum. No injection was performed.");
+        console.log(`The class is an enum. No injection was performed on: ${filePath}`);
         return { isTest: false };
     }
 
@@ -132,7 +138,7 @@ async function injectHack(filePath) {
     // and we want X/(X + numLines) = 0.8, resulting in X = 4 * numLines.
     let methodLinesTotal = numLines * 4;
 
-    if((methodLinesTotal + numLines) > 4100){
+    if ((methodLinesTotal + numLines) > 4100) {
         methodLinesTotal = 4100 - numLines;
     }
 
