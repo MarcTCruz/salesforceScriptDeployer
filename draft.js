@@ -11,9 +11,9 @@
  */
 const INACTIVATE = false; // Set to true to inactivate triggers, flows, etc.
 const fs = require('fs-extra');
+const convert = require('xml-js');
 const path = require('path');
 const { execSync } = require('child_process');
-const convert = require('xml-js');
 const { injectHack } = require('./apexClassCoverageHack');
 
 const DEPLOY_STAGING = path.join(process.cwd(), 'deploy-staging');
@@ -23,6 +23,8 @@ const PACKAGES_DIR = path.join(DEPLOY_STAGING, 'packages');
 const METADATA_STATES_FILE = path.join(DEPLOY_STAGING, 'metadata-original-states.json');
 
 let originalStates = {};
+const changedFiles = []; // RATIONALE: Array to store the paths of new and modified files for the final diff output.
+
 // Helpers
 const getAllFiles = (dirPath, files = []) => {
     if (!fs.existsSync(dirPath)) return files;
@@ -34,12 +36,31 @@ const getAllFiles = (dirPath, files = []) => {
     return files;
 };
 
+/**
+ * RATIONALE: This function normalizes file content by trimming whitespace
+ * from each line and filtering out empty lines. This provides a more
+ * reliable comparison than the previous full-content normalization,
+ * as it is less sensitive to formatting changes like indentation while
+ * still detecting meaningful structural and content changes, aligning
+ * more closely with the behavior of `git diff -w`.
+ */
 const areFilesDifferent = (fileA, fileB) => {
     if (!fs.existsSync(fileB)) return true;
-    const contentA = fs.readFileSync(fileA, 'utf8').replace(/^\s+|\s+$/gm, '');//removes leading and trailing spaces on each line
-    const contentB = fs.readFileSync(fileB, 'utf8').replace(/^\s+|\s+$/gm, '');
+
+    const normalizeContent = (content) => {
+        // Handles both LF and CRLF line endings
+        return content.split(/\r?\n/)
+            .map(line => line.trim())
+            .filter(line => line.length > 0)
+            .join('\n');
+    };
+
+    const contentA = normalizeContent(fs.readFileSync(fileA, 'utf8'));
+    const contentB = normalizeContent(fs.readFileSync(fileB, 'utf8'));
+
     return contentA !== contentB;
 };
+
 const lockedFiles = new Set();
 const getFileLock = async (...filePath) => {
     while (filePath.some(file => lockedFiles.has(file))) {
@@ -131,13 +152,17 @@ const processActionOverrides = xmlObj => {
                 modified = true;
                 return false;
             }
-            const actionName = findElement(elem, 'actionName');
-            if (actionName && typeElem.elements[0].text in ['ResumeBilling']) {
+            // FIX: Correctly check the actionName against a list of values.
+            const actionNameElem = findElement(elem, 'actionName');
+            const actionNameText = actionNameElem?.elements?.[0]?.text;
+            if (actionNameText && ['ResumeBilling', 'SuspendBilling'].includes(actionNameText)) {
                 modified = true;
                 return false;
             }
         }
-        modified = processActionOverrides(elem) || modified;
+        if (processActionOverrides(elem)) {
+            modified = true;
+        }
         return true;
     });
     return modified;
@@ -260,7 +285,8 @@ const identifyNewMetadata = async ({ sourcePath, targetPath, debug, exceptionMap
             const paths = path.dirname(relativePath).split(path.sep);
             const exceptionKey = paths[0];
             if (exceptionKey in exceptionMap && isPathException(relativePath, exceptionMap[exceptionKey].ignoredPaths ?? [])) {
-                console.log(`Ignorado conforme exceptionPath.json: ${relativePath}`);
+                // RATIONALE: Uncomment the line below to see every file that is being skipped by the exception rules.
+                // console.log(`[IGNORED BY EXCEPTION] ${relativePath}`);
                 return;
             }
 
@@ -272,7 +298,8 @@ const identifyNewMetadata = async ({ sourcePath, targetPath, debug, exceptionMap
                 }
             }
 
-            if (exceptionKey === 'objects' && 3 === path.length && path[2].includes('listViews') && sourceFile.endsWith('-meta.xml')) {
+            // FIX: Use the `paths` array for the check.
+            if (exceptionKey === 'objects' && paths.length === 3 && paths[2] === 'listViews' && sourceFile.endsWith('-meta.xml')) {
                 const xmlContent = fs.readFileSync(sourceFile, 'utf8');
                 if (xmlContent.includes('<filterScope>Mine</filterScope>')) {
                     console.log(`Ignorando arquivo com <filterScope>Mine</filterScope>: ${relativePath}`);
@@ -287,11 +314,16 @@ const identifyNewMetadata = async ({ sourcePath, targetPath, debug, exceptionMap
                 return;
             }
             copiedFiles.add(sourceFileCounterPath);
+
+            // RATIONALE: This block now also adds the relative path to our global
+            // changedFiles array, which will be used later to generate changes.diff.
             if (!fs.existsSync(targetFile)) {
                 await copyFileWithStructure(sourceFile, sourcePath, NEWS_DIR);
+                changedFiles.push(relativePath);
                 debug && console.log(`Novo: ${relativePath}`);
             } else if (areFilesDifferent(sourceFile, targetFile)) {
                 await copyFileWithStructure(sourceFile, sourcePath, NEWS_DIR);
+                changedFiles.push(relativePath);
                 debug && console.log(`Alterado: ${relativePath}`);
             } else {
                 return;
@@ -344,12 +376,6 @@ const sanitizeMetadata = async (exceptionMap, injectHackFlag = false) => {
                     const { isTest } = await injectHack(destSanitizedPath, injectHackFlag);
                     const exceptionKey = path.dirname(relativePath).split(path.sep).pop().trim();
                     const mustIncludeTest = isTest && exceptionKey in exceptionMap && isPathException(relativePath, exceptionMap[exceptionKey].includeTests ?? []);
-
-                    /*if (relativePath.includes('DataFactory')) {
-                        console.log(isTest, mustIncludeTest, exceptionMap, exceptionKey, exceptionMap);
-                        console.log(exceptionMap[exceptionKey].includeTests);
-                        process.exit()
-                    }*/
 
                     if (isTest && false === mustIncludeTest) {
                         // Add the -meta.xml counterPart
@@ -416,22 +442,6 @@ const sanitizeMetadata = async (exceptionMap, injectHackFlag = false) => {
                 modified = true;
                 console.log(`FlowDefinition desativada: ${relativePath}`);
             }
-
-            // Triggers: muda de Active para Inactive
-            /*if (pathDirs[0] === 'triggers') {
-                const statusElem = findElement(xmlObj, 'status');
-                if (!statusElem) {
-                    console.error(`Elemento <status> ausente: ${relativePath}`);
-                    process.exit(1);
-                }
-                if (statusElem.elements[0].text === 'Active') {
-                    originalStates[relativePath] = { type: 'Trigger', originalValue: 'Active' };
-                    statusElem.elements[0].text = 'Inactive';
-                    modified = true;
-                    console.log(`Trigger inativada: ${relativePath}`);
-                }
-            }
-                QUando sobe Inact, Salesforce é incapaz de testart a trigger, logo falha.*/
 
             // Validation Rules: desativa se <active> estiver true
             if (INACTIVATE && pathDirs[0] === 'objects' && relativePath.includes(path.join('validationRules', ''))) {
@@ -576,27 +586,6 @@ const generateDeployCommands = async () => {
     console.log('Deployment commands written to deployCommands.txt');
 };
 
-// -------------------------------------------------------
-// Fase 4: Deploy
-// -------------------------------------------------------
-const deployPackages = async () => {
-    throw 'Não usar esta função a menos que saiba realmente o que está fazendo!';
-    console.log('Fase 4: Deploy dos pacotes...');
-    const packageOrder = ['package1', 'package2', 'package3', 'package4', 'package5', 'package6', 'package7', 'package8', 'package9', 'package10', 'package11', 'package12'];
-
-    for (const pkgName of packageOrder) {
-        const pkgPath = path.join(PACKAGES_DIR, pkgName);
-        console.log(`Deploy do pacote ${pkgName} – ${pkgPath}`);
-        try {
-            execSync(`sf project deploy start -d ${pkgPath} --json`, { stdio: 'inherit' });
-            console.log(`Pacote ${pkgName} deploy com sucesso.`);
-        } catch (error) {
-            console.error(`Deploy falhou em ${pkgName}: ${error.message}`);
-            process.exit(1);
-        }
-    }
-};
-
 
 // -------------------------------------------------------
 // Pós-Deploy – Reativação
@@ -665,6 +654,20 @@ const ensureSfdxProjectJson = async () => {
         console.log('Skipping sfdx-project.json creation...');
     }
 };
+
+/**
+ * RATIONALE: This new function generates the changes.diff file. It is called
+ * at the end of the main process to ensure it has the complete list of
+ * changed files collected during the identifyNewMetadata phase.
+ */
+const generateChangesDiff = async () => {
+    const diffFilePath = path.join(process.cwd(), 'changes.diff');
+    // Sort the files for a consistent output order
+    const sortedFiles = changedFiles.sort();
+    await fs.writeFile(diffFilePath, sortedFiles.join('\n'), 'utf8');
+    console.log(`\nGenerated diff file with ${sortedFiles.length} new/modified files at: ${diffFilePath}`);
+};
+
 // -------------------------------------------------------
 // Função Principal
 // -------------------------------------------------------
@@ -702,6 +705,7 @@ const main = async () => {
         const outputFile = path.join(process.cwd(), 'specifiedTests.txt');
         processApexFiles(package3Dir, outputFile);
         await generateDeployCommands();
+        await generateChangesDiff(); // RATIONALE: Call the new function here.
         console.log('Pacotes para deploy gerados com sucesso.');
         console.log('Versão 2025-04-11 08:17');
     } catch (err) {

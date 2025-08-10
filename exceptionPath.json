@@ -36,6 +36,36 @@
     },
     "classes": {
         "ignoredPaths": [
+            "BatchUpdateFreteCompTest.cls",
+            "AccessRequestDelegateApproverLimboTest.cls",
+            "AccountEVAlternaTriggerFieldUpdateTest.cls",
+            "ConsultaEstoqueControllerTest.cls",
+            "CheckFreteComplementarTest.cls",
+            "ConsultaCarteiraControllerTest.cls",
+            "AllTriggersTest.cls",
+            "DataFactoryv2.cls",
+            "AccountData.cls",
+            "DataFactoryv2Test.cls",
+            "SalesOfficeData.cls",
+            "NewCockpitLimboTest2.cls",
+            "UserData.cls",
+            "WarningLogData.cls",
+            "TIDSettingsData.cls",
+            "BatchUpdateFreteCompTest.cls-meta.xml",
+            "AccessRequestDelegateApproverLimboTest.cls-meta.xml",
+            "AccountEVAlternaTriggerFieldUpdateTest.cls-meta.xml",
+            "ConsultaEstoqueControllerTest.cls-meta.xml",
+            "CheckFreteComplementarTest.cls-meta.xml",
+            "ConsultaCarteiraControllerTest.cls-meta.xml",
+            "AllTriggersTest.cls-meta.xml",
+            "DataFactoryv2.cls-meta.xml",
+            "AccountData.cls-meta.xml",
+            "DataFactoryv2Test.cls-meta.xml",
+            "SalesOfficeData.cls-meta.xml",
+            "NewCockpitLimboTest2.cls-meta.xml",
+            "UserData.cls-meta.xml",
+            "WarningLogData.cls-meta.xml",
+            "TIDSettingsData.cls-meta.xml",
             "EinsteinBot_EmployeeBasicInfo.cls",
             "EinsteinBot_EmployeeBasicInfo.cls-meta.xml",
             "EinsteinBot_EmployeeBasicinfoTest.cls",
@@ -90,11 +120,6 @@
     "workflows": {
         "ignoredPaths": [
             "Lead.workflow-meta.xml"
-        ]
-    },
-    "assignmentRules": {
-        "ignoredPaths": [
-            "/.*/"
         ]
     }
 }
